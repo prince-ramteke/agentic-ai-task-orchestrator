@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Spring Boot version: 3.4.1 (see docs/ADR/0001-technology-baseline.md).
+      Chosen because it is the officially-aligned platform for springdoc-openapi 2.7.0,
+      is fully compatible with Java 21, and keeps the door open for Spring AI 1.0.x and
+      Spring Security 6.4.x in later milestones.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.prince.agentic</groupId>
+    <artifactId>agentic-ai-task-orchestrator</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>Agentic AI Task Orchestrator :: Backend</name>
+    <description>Backend foundation (Milestone 1) for the Agentic AI Task Orchestrator.</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Keep third-party versions centralized and intentional. -->
+        <springdoc.version>2.7.0</springdoc.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web (REST) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Actuator (health / info) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Bean Validation foundation for request DTOs -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- OpenAPI / Swagger UI (aligned with Spring Boot 3.4.x) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+          Deliberately NOT added in Milestone 1 (see docs/ADR/0002-defer-persistence-to-m3.md):
+            - spring-boot-starter-data-jpa
+            - org.postgresql:postgresql
+            - flyway
+            - spring-boot-starter-data-redis
+            - spring-boot-starter-security
+            - spring-ai-*
+            - testcontainers
+          These arrive with the milestone that actually needs them.
+        -->
+    </dependencies>
+
+    <build>
+        <!-- Filter application*.yml so @project.version@ resolves to the real build version (honest version reporting). -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>application*.yml</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application*.yml</exclude>
+                </excludes>
+            </resource>
+        </resources>
+
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+              JaCoCo: coverage REPORTING only in Milestone 1 (no enforcement gate yet).
+              Enforcement thresholds are activated in Milestone 3 once real domain logic
+              exists (see docs/TESTING.md). This keeps `mvn verify` green and honest.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

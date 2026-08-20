@@ -1,0 +1,13 @@
+# Local development profile (the default profile).
+# Optimised for a fast inner loop with no external infrastructure required.
+
+# Show health component details locally for convenience. Kept 'never' in the base
+# profile so a production deployment does not leak internals by default.
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.prince.agentic: DEBUG

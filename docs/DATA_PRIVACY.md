@@ -1,0 +1,50 @@
+# Data Privacy
+## Agentic AI Task Orchestrator
+
+> Conceptual policy. Guides how user data, prompts, outputs, logs, and external providers are handled. Applied as features are built.
+
+## 1. Data categories
+
+| Category | Examples | Handling |
+|---|---|---|
+| Credentials | passwords, JWTs, `JWT_SECRET`, API keys | Never logged, audited, cached, or sent to a model. BCrypt for passwords; env for secrets. |
+| User content | task titles/descriptions, customer records | Stored in Postgres, owner-scoped. Redacted/summarized in logs and audit. |
+| Prompts & model I/O | objectives, tool observations, model output | Not logged in full; delimited as untrusted; not sent externally unless fallback enabled. |
+| Operational metadata | ids, timestamps, metrics | Logged/audited with correlation/execution ids; no sensitive content in metric labels. |
+
+## 2. Local-first by default
+
+Development uses **Ollama locally**; user data does not leave the machine. `LLM_FALLBACK_ENABLED=false` by default.
+
+## 3. External model providers (opt-in only)
+
+Sending data to an external provider (e.g. OpenAI) is **off by default**. It may be enabled only when:
+1. `LLM_FALLBACK_ENABLED=true` is set deliberately, and
+2. a privacy review confirms the data categories involved are acceptable to send, and
+3. the behavior is disclosed.
+
+Even then: never send credentials, never send other users' data, and minimize the payload.
+
+## 4. What must NOT be sent to any external service
+
+Passwords, tokens, secrets, keys; another user's data; full audit records; anything beyond the minimum needed for the task.
+
+## 5. Logging & redaction
+
+- Redact or omit sensitive content in logs and audit; store ids/references and short summaries instead of raw payloads (`OBSERVABILITY.md`, `AUDIT_LOGGING.md`).
+- Never place sensitive data in URL query parameters.
+- Never log full prompts or full tool payloads.
+
+## 6. Retention (targets, to be finalized)
+
+- Durable execution records + audit: retained for the demo's lifetime; a retention/rotation policy is an ADR when the system is deployed.
+- Redis ephemeral state: expires by TTL (`MEMORY.md`).
+- Operational logs: rotated per deployment config.
+
+## 7. User data rights (future)
+
+Deletion/export of a user's data (tasks, customers, execution history) is a planned capability; when added, cascade rules and audit implications are documented here and in `DATABASE.md`.
+
+## 8. Testing
+
+Assert that no secret/PII appears in logs, audit records, or outbound requests; that external calls are gated by the fallback flag; and that redaction is applied on sensitive fields (`TESTING.md`).

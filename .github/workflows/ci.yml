@@ -1,0 +1,31 @@
+name: CI
+
+# Minimal build+test pipeline for the backend. Expands as later milestones add
+# integration infrastructure. Fails the build on any test or compilation failure.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-build:
+    name: Backend build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and verify
+        run: ./mvnw -B --no-transfer-progress clean verify

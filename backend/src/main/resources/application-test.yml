@@ -1,0 +1,10 @@
+# Test profile — deterministic, quiet, no external infrastructure.
+
+spring:
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    root: WARN
+    com.prince.agentic: INFO

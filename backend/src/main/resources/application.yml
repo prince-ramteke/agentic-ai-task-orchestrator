@@ -1,0 +1,62 @@
+# Base configuration — shared across all profiles.
+# Profile-specific overrides live in application-local.yml / application-test.yml.
+# @project.version@ is filtered in at build time (see pom.xml) so the reported version is real.
+
+spring:
+  application:
+    name: agentic-ai-task-orchestrator
+  profiles:
+    default: local
+
+app:
+  version: @project.version@
+
+server:
+  port: 8080
+
+# Actuator: expose ONLY health and info over HTTP. Health details are hidden by default
+# (no dependency internals leaked); local dev turns them on (see application-local.yml).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    version: @project.version@
+    description: Agentic AI Task Orchestrator backend (Milestone 1 — Backend Foundation).
+
+# OpenAPI / Swagger UI
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.prince.agentic: INFO
+
+# --- PLANNED (not active in Milestone 1) ---
+# Persistence is deliberately deferred to Milestone 3 (see docs/ADR/0002-defer-persistence-to-m3.md).
+# When the domain model arrives, the datasource is wired from environment variables, e.g.:
+#
+# spring:
+#   datasource:
+#     url: ${DATABASE_URL}
+#     username: ${DATABASE_USERNAME}
+#     password: ${DATABASE_PASSWORD}
+#   jpa:
+#     hibernate:
+#       ddl-auto: validate      # schema owned by Flyway migrations, never auto-generated
+#
+# No datasource is configured now, so the application starts with zero external infrastructure.
