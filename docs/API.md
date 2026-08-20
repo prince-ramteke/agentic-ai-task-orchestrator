@@ -63,16 +63,37 @@ List endpoints accept `page` (0-based), `size` (bounded max), `sort` (`field,asc
 - Retryable unsafe operations (e.g. agent-initiated creates) support an idempotency key where duplication matters.
 - Breaking changes to a published response shape (notably the agent execution response) require versioning and a documented migration — never a silent change.
 
-## 6a. Implemented endpoints (Milestone 1) — VERIFIED
+## 6a. Implemented endpoints — VERIFIED
 
-| Method | Path | Auth | Purpose | Status |
+| Method | Path | Auth | Purpose | Since |
 |---|---|---|---|---|
-| GET | `/api/v1/health` | public (M1: no auth yet) | App liveness + name/version/active-profiles | IMPLEMENTED, VERIFIED |
-| GET | `/actuator/health` | public | Operational health (Actuator) | IMPLEMENTED, VERIFIED |
-| GET | `/actuator/info` | public | App metadata (name/version/description) | IMPLEMENTED, VERIFIED |
-| GET | `/v3/api-docs` · `/swagger-ui.html` | public | OpenAPI document + Swagger UI | IMPLEMENTED, VERIFIED |
+| POST | `/api/v1/auth/register` | public | Register a user (always `ROLE_USER`) | M2 |
+| POST | `/api/v1/auth/login` | public | Authenticate → JWT access token | M2 |
+| GET | `/api/v1/me` | **authenticated** | Current principal (userId, email, roles) | M2 |
+| GET | `/api/v1/admin/ping` | **ROLE_ADMIN** | RBAC demonstration/probe | M2 |
+| GET | `/api/v1/health` | public | App liveness + name/version/active-profiles | M1 |
+| GET | `/actuator/health` · `/actuator/info` | public | Operational health / app metadata | M1 |
+| GET | `/v3/api-docs` · `/swagger-ui.html` | public | OpenAPI document + Swagger UI (Bearer-aware) | M1/M2 |
 
-> Only `health` and `info` Actuator endpoints are exposed; all others (env, beans, metrics, heapdump, …) return 404 by design (`SECURITY.md`). Authentication is added in M2 — until then there is no protected route to guard.
+> Deny-by-default: every route not listed as public requires `Authorization: Bearer <JWT>`.
+> Only `health` and `info` Actuator endpoints are exposed; all others (env, beans, metrics, heapdump, …) are not exposed — 401 to anonymous callers, 404 to authenticated ones (`SECURITY.md`).
+
+### Auth request/response shapes
+
+**`POST /api/v1/auth/register`** — body `{ "email": "user@example.com", "password": "ExamplePassword123!" }`
+- `email`: required, valid email, ≤255 chars. `password`: required, 8–72 chars (BCrypt input limit).
+- **201** → `{ "id", "email", "roles": ["ROLE_USER"], "createdAt" }` (never the password hash).
+- **409 `EMAIL_ALREADY_EXISTS`** on duplicate (case-insensitive). **400 `VALIDATION_ERROR`** on invalid input.
+
+**`POST /api/v1/auth/login`** — body `{ "email", "password" }`
+- **200** → `{ "accessToken": "<JWT>", "tokenType": "Bearer", "expiresIn": 3600 }`.
+- **401 `INVALID_CREDENTIALS`** — identical for unknown user, wrong password, or disabled account (no enumeration).
+
+**Protected calls** send `Authorization: Bearer <accessToken>`.
+- Missing/invalid/expired/forged token on a protected route → **401 `UNAUTHORIZED`**.
+- Authenticated but insufficient role → **403 `FORBIDDEN`**.
+
+Machine error codes in the envelope (`error` field): `VALIDATION_ERROR`, `MALFORMED_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_ERROR`.
 
 ## 7. Planned endpoints (design only — not implemented)
 

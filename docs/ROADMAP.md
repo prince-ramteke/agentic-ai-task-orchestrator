@@ -9,7 +9,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 |---|---|---|
 | 0 | Starter Kit | ✅ |
 | 1 | Backend Foundation | ✅ |
-| 2 | Authentication & Authorization | ⬜ |
+| 2 | Authentication & Authorization | ✅ |
 | 3 | Core Domain | ⬜ |
 | 4 | Spring AI Integration | ⬜ |
 | 5 | Tool Registry | ⬜ |
@@ -42,13 +42,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `TECH_STACK.md`, `API.md`, `ERROR_HANDLING.md`, `DATABASE.md`, `TESTING.md`, `OBSERVABILITY.md`, `DEPLOYMENT.md`, `CHANGELOG.md`, `README.md`.
 - **Deferred to later milestones:** persistence/JPA (M3), coverage-enforcement gate (M3), auth/security (M2), correlation-ID propagation (M10).
 
-### Milestone 2 — Authentication & Authorization ⬜
+### Milestone 2 — Authentication & Authorization ✅
 - **Objective:** JWT auth, BCrypt passwords, RBAC (USER/ADMIN), ownership enforcement pattern.
 - **Prerequisites:** M1.
-- **Outputs:** `auth` feature (register/login), Spring Security config, JWT filter, `@PreAuthorize` on admin routes, ownership-check pattern, security tests (401/403).
-- **Validation:** auth flows tested; public routes whitelisted; unauthorized access blocked in tests.
-- **Docs:** `SECURITY.md`, `API.md` (auth endpoints), `THREAT_MODEL.md` (auth threats), `CHANGELOG.md`.
-- **DoD:** security tests pass; no secrets committed.
+- **Delivered (IMPLEMENTED + VERIFIED):** persistence stack (JPA + PostgreSQL + Flyway; `users`/`roles`/`user_roles`, seeded roles); `auth` feature (`POST /api/v1/auth/register`, `/login`); `security` package (`SecurityConfig` deny-by-default, `JwtService` + stateless `JwtAuthenticationFilter`, `AuthenticatedUser` principal, `CustomUserDetailsService`, BCrypt, JSON 401/403 responders, `AuthorizationService` ownership foundation); protected `GET /api/v1/me`; ADMIN-only `GET /api/v1/admin/ping` (`@PreAuthorize`); Swagger Bearer scheme; 31 new tests (39 total).
+- **Validation (VERIFIED 2026-08-21):** `./mvnw clean test` PASS (39), `./mvnw verify` PASS, `./mvnw clean package` PASS. Real socket-level HTTP verified via `RANDOM_PORT` (`AuthHttpSocketTest`); security matrix (register/login/JWT/RBAC/401/403/hashing/enumeration/actuator) green.
+- **Decisions:** ADR-0003 (user/role model), ADR-0004 (JWT strategy), ADR-0005 (migration & test-DB strategy).
+- **Docs updated:** `SECURITY.md`, `THREAT_MODEL.md`, `DATA_PRIVACY.md`, `API.md`, `DATABASE.md`, `TESTING.md`, `TECH_STACK.md`, `DEPLOYMENT.md`, `OBSERVABILITY.md`, `CHANGELOG.md`, `README.md`.
+- **Deferred:** ownership on concrete resources (M3), Testcontainers-PostgreSQL (M3), login rate limiting & token rotation/revocation (later).
 
 ### Milestone 3 — Core Domain ⬜
 - **Objective:** Task and Customer domains with CRUD, owned by users.

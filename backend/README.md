@@ -1,38 +1,42 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. **Milestone 1 (Backend Foundation)** — a clean, runnable skeleton that later milestones build on. No domain, security, persistence, or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+Spring Boot backend module. Through **Milestone 2** it provides the backend foundation plus the
+authentication & authorization boundary (JWT, BCrypt, RBAC, user/role persistence). No domain,
+Spring AI, or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
 - **Java 21** (Temurin recommended). No global Maven needed — the Maven Wrapper (`./mvnw`) is included.
-- No database or other infrastructure is required for Milestone 1.
+- **Running the app** requires a **PostgreSQL** and env vars (`DATABASE_*`, `JWT_SECRET`, …) — see [`../.env.example`](../.env.example). **Testing** needs neither (H2 + the real migrations).
 
-## Run
+## Build & test (no infrastructure)
 
 ```bash
+./mvnw verify        # 39 tests against H2 running the production Flyway migrations
+```
+
+## Run (needs PostgreSQL + env)
+
+```bash
+# export DATABASE_URL / DATABASE_USERNAME / DATABASE_PASSWORD / JWT_SECRET first
 ./mvnw spring-boot:run
 ```
 
-Or build a jar and run it:
-
-```bash
-./mvnw clean package
-java -jar target/agentic-ai-task-orchestrator-0.0.1-SNAPSHOT.jar
-```
-
-Default port: `8080`. Default profile: `local`.
+Default port: `8080`. Default profile: `local`. Flyway applies the schema at startup.
 
 ## Verify it's up
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /actuator/health` | Operational health (Actuator) |
-| `GET /actuator/info` | App metadata (name/version) |
-| `GET /api/v1/health` | App liveness + name/version/active-profiles |
-| `GET /v3/api-docs` | OpenAPI document |
-| `GET /swagger-ui.html` | Swagger UI |
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/v1/auth/register` | public | Register (always `ROLE_USER`) |
+| `POST /api/v1/auth/login` | public | Authenticate → JWT |
+| `GET /api/v1/me` | Bearer | Current authenticated principal |
+| `GET /api/v1/admin/ping` | ADMIN | RBAC demonstration |
+| `GET /api/v1/health` · `/actuator/health` · `/actuator/info` | public | Liveness / metadata |
+| `GET /swagger-ui.html` | public | Swagger UI (click **Authorize** to send a JWT) |
 
-Only `health` and `info` Actuator endpoints are exposed; all others return 404 by design.
+Deny-by-default: any other route needs a valid Bearer token. Only `health`/`info` Actuator
+endpoints are exposed (others: 401 anonymous / 404 authenticated).
 
 ## Test
 
@@ -46,10 +50,18 @@ Only `health` and `info` Actuator endpoints are exposed; all others return 404 b
 ```
 com.prince.agentic
 ├── AgenticApplication            # entry point
-├── config/OpenApiConfig          # OpenAPI metadata
+├── config/OpenApiConfig          # OpenAPI metadata + Bearer scheme
 ├── common/response/              # ApiError, FieldValidationError (error envelope)
-├── common/exception/             # ResourceNotFoundException, GlobalExceptionHandler
+├── common/exception/             # ApiException base, GlobalExceptionHandler
+├── security/                     # SecurityConfig, JwtService, JwtAuthenticationFilter,
+│                                 #   AuthenticatedUser, AuthorizationService, 401/403 responders
+├── auth/                         # register/login controller, service, DTOs, exceptions
+├── user/                         # User/Role entities + repositories
+├── account/                      # MeController (/api/v1/me)
+├── admin/                        # AdminController (/api/v1/admin/ping)
 └── health/                       # HealthController, HealthResponse
+
+resources/db/migration/           # V1 (users/roles/user_roles), V2 (seed roles)
 ```
 
 Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profiles). The reported version is filtered in from the build at package time.
@@ -63,7 +75,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Persistence/JPA & PostgreSQL (M3 — see `../docs/ADR/0002-defer-persistence-to-m3.md`), Spring Security/JWT (M2), Spring AI/Ollama (M4), Redis (M7), the agent runtime (M6+). Dependencies are added by the milestone that needs them.
+Domain entities/CRUD & Testcontainers-PostgreSQL (M3), Spring AI/Ollama (M4), tool registry (M5), the agent runtime (M6+), Redis (M7). Dependencies are added by the milestone that needs them.
 
 ## Docker
 

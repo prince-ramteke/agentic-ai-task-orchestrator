@@ -1,19 +1,37 @@
 # Security Model
 ## Agentic AI Task Orchestrator
 
-> Conceptual model. Auth is planned (M2). Nothing is implemented yet. The LLM is treated as an untrusted planner, never a security boundary.
+> **Milestone 2 status: authentication & authorization IMPLEMENTED and VERIFIED.** The core
+> auth boundary (JWT, BCrypt, RBAC, deny-by-default) is live and tested. Ownership enforcement
+> on domain resources and AI-tool authorization are foundations here and are wired up in later
+> milestones (M3+/M5+). The LLM is treated as an untrusted planner, never a security boundary.
 
-## 1. Authentication
+## 1. Authentication — IMPLEMENTED
 
-- Stateless **JWT** (short TTL, e.g. `JWT_EXPIRATION_MINUTES=30`), signed with `JWT_SECRET` from the environment.
-- Passwords hashed with **BCrypt**; never stored or logged in plaintext.
-- Public routes only: `/api/auth/**`, `/actuator/health`, Swagger. Everything else requires a valid token.
+- Stateless **JWT (HS256)**, short TTL via `JWT_EXPIRATION_SECONDS` (default 3600), signed with
+  `JWT_SECRET` from the environment (must be ≥ 256 bits; the app fails fast on a weak secret).
+- Passwords hashed with **BCrypt** (`BCryptPasswordEncoder`); the raw password exists only
+  transiently and is never stored or logged.
+- Login authenticates via Spring Security's `AuthenticationManager` + a DAO provider
+  (`CustomUserDetailsService`); per-request auth is a stateless filter that verifies the token
+  and builds an `AuthenticatedUser` from claims — **no DB lookup per request** (ADR-0004).
+- Public routes only: `/api/v1/auth/**`, `/api/v1/health`, `/actuator/health`, `/actuator/info`,
+  and the Swagger/OpenAPI paths. **Everything else requires a valid token (deny by default).**
 
-## 2. Authorization (RBAC + ownership)
+## 2. Authorization (RBAC + ownership) — IMPLEMENTED (RBAC) / FOUNDATION (ownership)
 
-- Roles: **USER** (owns tasks/customers) and **ADMIN** (manages users, inspects executions/audit).
-- Method security: `@PreAuthorize("hasRole('ADMIN')")` on `/api/admin/**`.
-- **Ownership** is enforced in services and tools: a USER may only read/modify their own resources, checked server-side against the authenticated principal — never against a client- or model-supplied claim.
+- Roles: **ROLE_USER** (default for every registered user) and **ROLE_ADMIN** (server-assigned).
+  Roles are persisted (`roles` + `user_roles`) and seeded by Flyway (ADR-0003).
+- Method security: `@PreAuthorize("hasRole('ADMIN')")` guards `/api/v1/admin/**`
+  (demonstrated by `GET /api/v1/admin/ping`). USER → 403, ADMIN → 200, anonymous → 401.
+- **The authenticated principal** is `AuthenticatedUser(userId, email, roles)`, resolved from the
+  verified token — the single identity future services and agent tools authorize against.
+- **Ownership** foundation: `AuthorizationService.requireOwnershipOrAdmin(user, ownerId)` — the
+  reusable, server-side check that a USER may only touch their own resources (ADMIN may act per
+  permission), verified against the authenticated principal, never a client/model claim. Domain
+  resources to apply it to arrive in M3+.
+- **The client can never choose a role:** `RegisterRequest` has no role field; public
+  registration always grants `ROLE_USER`; ADMIN is a controlled server-side assignment only.
 
 ## 3. Authorizing AI-initiated actions (the core problem)
 
@@ -57,3 +75,47 @@ No stack traces or internal detail in API responses; all errors go through the g
 ## 9. On every new endpoint or tool
 
 Authenticated by default? Ownership/authorization enforced before effect? Input/arguments validated? Errors routed through the handler? Dangerous op gated by confirmation? Security test for the 401/403 path added? If any answer is "no", it is not done.
+
+## 10. Implemented details (M2)
+
+**Endpoints.** Public: `POST /api/v1/auth/register` (→ 201, always `ROLE_USER`), `POST /api/v1/auth/login` (→ 200 `{accessToken, tokenType:"Bearer", expiresIn}`). Protected: `GET /api/v1/me` (any authenticated user), `GET /api/v1/admin/ping` (ADMIN only).
+
+**Token lifecycle & claims.** HS256, issuer `agentic-ai-task-orchestrator`, TTL `JWT_EXPIRATION_SECONDS`. Claims: `sub` (user id), `email`, `roles`, `iat`, `exp`, `iss`. No password/hash/secret is ever placed in a token. Verification checks signature, issuer, and expiration.
+
+**401 vs 403.**
+- **401 UNAUTHORIZED** — missing/invalid/expired/malformed/forged token on a protected route (via `RestAuthenticationEntryPoint`).
+- **403 FORBIDDEN** — authenticated but lacking the required role (via `@PreAuthorize` → global handler, and `RestAccessDeniedHandler` for filter-level denials).
+- Both render the standard `ApiError` envelope; a bad token never yields 500.
+
+**Secrets & config.** `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, `DATABASE_*`, `CORS_ALLOWED_ORIGINS` come from the environment (`.env.example`). Only a clearly-labeled **test-only** JWT secret is committed (in `application-test.yml`), never a usable production secret.
+
+**CORS / CSRF.** CORS is restricted to configured origins (no wildcard-with-credentials). CSRF protection is disabled **deliberately** because the API is stateless and token-based with no cookie session; if any cookie-based flow is added, CSRF tokens must be reintroduced.
+
+**Account enumeration.** Login failures (unknown user, wrong password, disabled account) all return an identical generic `401 INVALID_CREDENTIALS` — the response never reveals whether an account exists.
+
+**Brute force / rate limiting.** *Not implemented in M2.* Current mitigations are BCrypt (slow hashing) + short token TTL + generic errors. Per-IP/per-account login rate limiting is future work (`THREAT_MODEL.md` T9/T10, `GUARDRAILS.md`).
+
+**Known limitations (honest).**
+- Token authorities are as-of-issue; a role change applies on next login (bounded by the short TTL).
+- No token revocation/rotation/denylist yet — a stolen token is valid until expiry.
+- Ownership enforcement is a tested foundation (`AuthorizationService`); it is applied to concrete resources from M3.
+
+## 11. The agent-future security contract (must not regress)
+
+When the agent arrives (M6+), the LLM proposes actions; it is **never** trusted to authorize them. Every tool execution follows:
+
+```
+LLM proposes a tool call
+      ↓
+Backend resolves the authenticated user (AuthenticatedUser, from the verified token — not the model)
+      ↓
+Tool authorization check   (is this user allowed to use this tool in this context?)
+      ↓
+Resource ownership check   (AuthorizationService.requireOwnershipOrAdmin — server-side)
+      ↓
+Tool argument validation   (typed schema; never trust model-supplied ids/args)
+      ↓
+Execute (+ audit)
+```
+
+The agent can never exceed the authenticated user's own permissions, and admin tools are never offered in a USER context. M2 establishes the identity (`AuthenticatedUser`) and ownership primitive (`AuthorizationService`) this contract depends on; the tool-authorization engine is built in M5.

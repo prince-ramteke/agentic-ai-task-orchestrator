@@ -2,7 +2,8 @@ package com.prince.agentic.health;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -11,9 +12,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Verifies the technical health endpoint serves real application info.
+ * Verifies the technical health endpoint serves real application info. Runs against the full
+ * context with security filters disabled ({@code addFilters = false}) to test the controller
+ * in isolation; the endpoint's public/authenticated behavior under security is covered by the
+ * security suite ({@code AuthIntegrationTest}).
  */
-@WebMvcTest(HealthController.class)
+@SpringBootTest
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")
 class HealthControllerTest {
 

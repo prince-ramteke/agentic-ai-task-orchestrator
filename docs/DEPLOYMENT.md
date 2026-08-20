@@ -3,14 +3,28 @@
 
 > Full deployment is planned (M12). The compose stack does not exist yet. The stack must start with one command from a clean clone.
 
-> **Milestone 1 status (VERIFIED 2026-08-21):** the `backend/` module runs standalone with **zero external infrastructure** (no DB/Redis needed yet — see ADR-0002).
+> **Milestone 2 status (VERIFIED 2026-08-21):** the backend now requires **PostgreSQL** and
+> security env vars to run. Required env: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`,
+> `JWT_SECRET` (≥ 32 chars), optionally `JWT_EXPIRATION_SECONDS` (default 3600) and
+> `CORS_ALLOWED_ORIGINS` (default `http://localhost:5173`). Flyway applies the schema at startup.
 >
 > ```bash
 > cd backend
-> ./mvnw spring-boot:run        # or: ./mvnw clean package && java -jar target/agentic-ai-task-orchestrator-0.0.1-SNAPSHOT.jar
+> # with a local PostgreSQL running and env exported (see .env.example):
+> ./mvnw spring-boot:run
 > ```
 >
-> Then: `GET http://localhost:8080/actuator/health`, `GET /api/v1/health`, `GET /swagger-ui.html`. A multi-stage, non-root `backend/Dockerfile` exists (authored and reviewed; **image build not yet verified** — the Docker daemon was not running in the M1 build environment, so `docker build` is deferred to when a Docker host is available). CI runs `./mvnw verify` on every push/PR via `.github/workflows/ci.yml`. **M1 introduces no required environment variables** — the app boots with defaults.
+> Then: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/me` (Bearer),
+> `GET /swagger-ui.html` (Authorize with the JWT). CI runs `./mvnw verify` on every push/PR.
+>
+> **Verification note:** the automated suite (incl. real socket-level HTTP via `RANDOM_PORT`) runs
+> against **H2 in PostgreSQL mode** with the same Flyway migrations, so it needs no Docker/Postgres
+> (ADR-0005). A live socket run of the packaged jar against a real PostgreSQL was **not** performed
+> in this build environment (no Docker daemon and no local PostgreSQL available); the production jar
+> correctly refuses to start without a real datasource. A multi-stage, non-root `backend/Dockerfile`
+> exists (image build still unverified — no Docker host).
+>
+> **M1 (superseded):** M1 ran with zero external infrastructure; M2 introduces the datastore.
 
 ## 1. Target topology (planned)
 

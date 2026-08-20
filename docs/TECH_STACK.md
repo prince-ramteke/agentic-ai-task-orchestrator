@@ -37,7 +37,9 @@ Every technology here has an architectural reason. Nothing is added to look impr
 | Maven Wrapper | 3.9.9 (script-only) | Reproducible build, no global Maven needed |
 | JaCoCo | 0.8.12 | Coverage **reporting** only in M1; enforcement gate deferred to M3 |
 
-Milestone 1 dependencies: `spring-boot-starter-web`, `-actuator`, `-validation`, `springdoc-openapi-starter-webmvc-ui`, `-test`. Persistence, Redis, Security, and Spring AI dependencies are **not** present yet (added by the milestones that need them — see ADR-0002).
+Milestone 1 dependencies: `spring-boot-starter-web`, `-actuator`, `-validation`, `springdoc-openapi-starter-webmvc-ui`, `-test`.
+
+**Added in Milestone 2 (auth):** `spring-boot-starter-security`, `spring-boot-starter-data-jpa`, `flyway-core` + `flyway-database-postgresql` (10.20.1), `org.postgresql:postgresql` (42.7.4, runtime), `io.jsonwebtoken:jjwt-api/impl/jackson` (0.12.6). Test-only: `spring-security-test`, `com.h2database:h2` (2.3.232). Redis and Spring AI are still **not** present (added by the milestones that need them). See ADR-0003/0004/0005.
 
 ## Frontend (Milestone 13)
 

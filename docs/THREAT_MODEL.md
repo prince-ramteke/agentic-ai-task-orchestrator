@@ -81,6 +81,20 @@ For each threat: **impact · likelihood · mitigation · detection · testing**.
 
 ---
 
+## M2 — implemented authentication/authorization mitigations (status)
+
+Concrete status of the auth-related threats now that M2 is implemented and verified:
+
+| Threat | Mitigation status (M2) |
+|---|---|
+| **Stolen/compromised JWT (T9)** | IMPLEMENTED: short TTL (`JWT_EXPIRATION_SECONDS`, default 3600), HS256 signature required, BCrypt hashes. PLANNED: token rotation/revocation/denylist; refresh tokens. A stolen token is currently valid until expiry. |
+| **Brute-force login (T9/T10)** | PARTIAL: BCrypt slow hashing + generic errors. PLANNED: per-IP/per-account login rate limiting (`GUARDRAILS.md`). |
+| **Privilege escalation / role manipulation (T4)** | IMPLEMENTED: client cannot supply a role (`RegisterRequest` has no role field); public register is always `ROLE_USER`; ADMIN is server-assigned only; authorities are derived from the signed token and re-checked by `@PreAuthorize`. |
+| **Token tampering / forgery** | IMPLEMENTED: signature + issuer + expiration verified on every request; a forged/altered/expired token yields 401, never authenticates. Verified by tests (forged signature, malformed, expired). |
+| **Account enumeration** | IMPLEMENTED: login failures (unknown user / wrong password / disabled) all return an identical generic `401 INVALID_CREDENTIALS`. |
+| **Password compromise (at rest)** | IMPLEMENTED: only BCrypt hashes stored (never plaintext); hash never returned by any API or logged. Verified by test. |
+| **Unauthorized resource access (T4/T6)** | FOUNDATION: `AuthorizationService.requireOwnershipOrAdmin` (server-side, principal-based) exists and is unit-tested; applied to concrete resources from M3. |
+
 ## Residual risk & review
 
 Model behavior is probabilistic; mitigations assume it can be wrong or adversarially steered — which is why **no security guarantee depends on the model**. This model is revisited whenever a new tool, external integration, or data category is added.

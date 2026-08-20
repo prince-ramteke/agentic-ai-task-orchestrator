@@ -67,11 +67,24 @@ public class GlobalExceptionHandler {
                 "The request body could not be read.", request, null);
     }
 
-    /** Domain resource not found → 404. */
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException ex,
-                                                   HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request, null);
+    /** Any domain {@link ApiException} → its declared status + machine code. */
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ApiError> handleApiException(ApiException ex,
+                                                       HttpServletRequest request) {
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
+    }
+
+    /**
+     * Authorization denial raised during method invocation (e.g. {@code @PreAuthorize}) → 403.
+     * Filter-chain-level denials are handled by {@code RestAccessDeniedHandler}; both render the
+     * same envelope. This handler also prevents the generic 500 fallback from swallowing a 403.
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex,
+            HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                "You do not have permission to access this resource.", request, null);
     }
 
     /** Unknown route / missing resource → 404 in the standard envelope. */

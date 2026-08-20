@@ -1,15 +1,14 @@
 package com.prince.agentic.common.exception;
 
+import org.springframework.http.HttpStatus;
+
 /**
  * Thrown when a requested resource does not exist (or is not visible to the caller).
- *
- * <p>Mapped centrally to HTTP 404 by {@link GlobalExceptionHandler}. This is the one
- * domain-agnostic exception the foundation needs now; feature-specific subtypes
- * (e.g. a task/customer not-found) are added by the milestones that introduce them.
+ * Renders as HTTP 404 with code {@code NOT_FOUND} via {@link GlobalExceptionHandler}.
  */
-public class ResourceNotFoundException extends RuntimeException {
+public class ResourceNotFoundException extends ApiException {
 
     public ResourceNotFoundException(String message) {
-        super(message);
+        super(HttpStatus.NOT_FOUND, "NOT_FOUND", message);
     }
 }

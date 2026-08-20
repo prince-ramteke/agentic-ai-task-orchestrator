@@ -3,7 +3,9 @@
 
 > Tests are added with each milestone. Deterministic, no live network/LLM.
 
-> **Milestone 1 status (VERIFIED 2026-08-21):** 8 tests exist and pass — context load (`AgenticApplicationTests`), health endpoint (`HealthControllerTest`, `@WebMvcTest`), error-handler mapping for 404/400/malformed via standalone MockMvc (`GlobalExceptionHandlerTest`), and config/version-filtering sanity (`ApplicationConfigTest`, 3 cases). `./mvnw verify` is green. JaCoCo produces a coverage **report**; the enforcement **gate** below is deferred to M3 (see §8).
+> **Milestone 1 status (VERIFIED 2026-08-21):** 8 tests — context load (`AgenticApplicationTests`), health endpoint (`HealthControllerTest`), error-handler mapping via standalone MockMvc (`GlobalExceptionHandlerTest`), and config/version-filtering sanity (`ApplicationConfigTest`).
+
+> **Milestone 2 status (VERIFIED 2026-08-21):** **39 tests total, all green** under `./mvnw verify`. Security suite: `AuthIntegrationTest` (20, `@SpringBootTest` + MockMvc through the real filter chain — register/login/JWT/RBAC/error-envelopes/password-hash/DB-constraint), `AuthHttpSocketTest` (3, `RANDOM_PORT` + `TestRestTemplate` — **real socket-level HTTP** over embedded Tomcat), `JwtServiceTest` (4 — roundtrip, expired, malformed, forged signature), `AuthorizationServiceTest` (4 — owner/admin/other/null ownership). Tests run against **H2 in PostgreSQL-compat mode executing the production Flyway migrations** — reproducible without Docker (ADR-0005). Testcontainers-PostgreSQL integration is deferred to M3.
 
 ## 1. Test pyramid
 

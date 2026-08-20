@@ -1,6 +1,6 @@
 # Agentic AI Task Orchestrator
 
-> **Project status: 🟢 Milestone 1 — Backend Foundation (complete & verified).** The `backend/` Spring Boot module now builds, tests, and runs. Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+> **Project status: 🟢 Milestone 2 — Authentication & Authorization (complete & verified).** JWT auth (register/login), BCrypt, RBAC (USER/ADMIN), a stateless security filter, and user/role persistence via Flyway are implemented and tested (39 tests green). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Overview
 
@@ -67,24 +67,25 @@ Milestones 0–14, from Starter Kit through Backend Foundation, Auth, Core Domai
 
 ## Local Development
 
-**Milestone 1 (works today).** The backend runs standalone with no database or other infrastructure required (Java 21 needed):
-
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-
-Then open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html), or:
-
-```bash
-curl http://localhost:8080/api/v1/health
-```
-
-Build and test:
+**Build & test (no infrastructure needed).** The full test suite runs against H2 executing the real migrations — Java 21 only:
 
 ```bash
 cd backend && ./mvnw verify
 ```
+
+**Run the app (Milestone 2).** Running now requires a PostgreSQL and security env vars. Copy [`.env.example`](.env.example) to `.env`, set `DATABASE_*`, `JWT_SECRET` (≥32 chars), then:
+
+```bash
+cd backend && ./mvnw spring-boot:run
+```
+
+Then register, log in, and call a protected endpoint:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"ExamplePassword123!"}'
+```
+
+Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html), log in via `/api/v1/auth/login`, click **Authorize**, and call `GET /api/v1/me`.
 
 > _Planned (Milestone 12)._ The full one-command stack (`docker-compose up --build`, bringing up PostgreSQL, Redis, Ollama, Prometheus, Grafana, and the frontend) is not implemented yet. Copy [`.env.example`](.env.example) to `.env` when those services arrive; M1 itself needs no environment variables. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
@@ -94,6 +95,7 @@ cd backend && ./mvnw verify
 |---|---|
 | Engineering governance (docs, rules, commands, prompts) | ✅ Implemented (M0) |
 | Backend foundation (Spring Boot skeleton, health, error model, OpenAPI, CI) | ✅ Implemented & verified (M1) |
+| Authentication & authorization (JWT, BCrypt, RBAC, user/role persistence) | ✅ Implemented & verified (M2) |
 | Authentication / RBAC | ⬜ Planned (M2) |
 | Core domain (tasks, customers) | ⬜ Planned (M3) |
 | Spring AI + tool registry | ⬜ Planned (M4–M5) |

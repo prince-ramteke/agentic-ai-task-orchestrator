@@ -28,6 +28,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Keep third-party versions centralized and intentional. -->
         <springdoc.version>2.7.0</springdoc.version>
+        <!-- JJWT: single, cohesive JWT library (HS256). See docs/ADR/0004-jwt-authentication-strategy.md. -->
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencies>
@@ -56,23 +58,84 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- === Milestone 2: Authentication & Authorization === -->
+
+        <!-- Spring Security (JWT auth, RBAC, method security) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Persistence for the security domain (users/roles) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Versioned schema migrations -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- PostgreSQL driver (local/prod runtime) -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JWT (HS256) — one library, no overlap -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- H2 in PostgreSQL-compat mode: runs the SAME Flyway migrations without Docker,
+             so the security suite is reproducible in any environment (ADR-0005).
+             Testcontainers-PostgreSQL integration is deferred to M3. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!--
-          Deliberately NOT added in Milestone 1 (see docs/ADR/0002-defer-persistence-to-m3.md):
-            - spring-boot-starter-data-jpa
-            - org.postgresql:postgresql
-            - flyway
-            - spring-boot-starter-data-redis
-            - spring-boot-starter-security
-            - spring-ai-*
-            - testcontainers
-          These arrive with the milestone that actually needs them.
+          Still deliberately NOT added (arrive with the milestone that needs them):
+            - spring-boot-starter-data-redis      (M7 — conversation/session memory)
+            - spring-ai-*                         (M4 — LLM integration)
+            - testcontainers                      (M3 — PostgreSQL integration tests)
+            - kafka / prometheus / grafana infra  (later milestones)
+          Persistence (JPA/PostgreSQL/Flyway) and Spring Security were added in M2 because
+          the authentication domain genuinely requires them (supersedes ADR-0002 for security data).
         -->
     </dependencies>
 

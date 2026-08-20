@@ -9,7 +9,38 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Work in progress toward Milestone 2 — Authentication & Authorization._
+_Work in progress toward Milestone 3 — Core Domain (Task/Customer)._
+
+---
+
+## [0.0.2] — 2026-08-21 — Milestone 2: Authentication & Authorization
+
+### Added
+- Persistence stack: Spring Data JPA + PostgreSQL driver + Flyway. Migrations `V1__create_users_and_roles.sql`, `V2__seed_roles.sql` (seeds `ROLE_USER`, `ROLE_ADMIN`; no users/passwords seeded).
+- `user` package: `User`, `Role` entities (`users`/`roles`/`user_roles`, unique email, BCrypt hash) + repositories.
+- `auth` package: `POST /api/v1/auth/register` (→ 201, always `ROLE_USER`) and `POST /api/v1/auth/login` (→ JWT); `RegisterRequest`/`LoginRequest`/`AuthResponse`/`UserResponse`; `EmailAlreadyExistsException` (409), `InvalidCredentialsException` (401).
+- `security` package: `SecurityConfig` (stateless, deny-by-default, method security, restricted CORS, CSRF-off documented), `JwtService` (jjwt HS256), stateless `JwtAuthenticationFilter`, `AuthenticatedUser` principal, `SecurityUser` + `CustomUserDetailsService`, `BCryptPasswordEncoder`, JSON `RestAuthenticationEntryPoint` (401) / `RestAccessDeniedHandler` (403), `AuthorizationService` (reusable ownership foundation).
+- Protected `GET /api/v1/me` (current principal) and ADMIN-only `GET /api/v1/admin/ping` (`@PreAuthorize`).
+- OpenAPI Bearer (`bearerAuth`) security scheme — Swagger "Authorize" works.
+- Unified error model: `common/exception/ApiException` base (M1 `ResourceNotFoundException` now extends it); handlers for `ApiException` and `AccessDeniedException`.
+- 31 new tests (39 total): `AuthIntegrationTest` (20, full filter chain via MockMvc), `AuthHttpSocketTest` (3, real socket HTTP via `RANDOM_PORT`), `JwtServiceTest` (4), `AuthorizationServiceTest` (4). Test DB: H2 in PostgreSQL mode running the production migrations.
+- Config: env-driven datasource + `security.jwt.*` + `security.cors.*`; `application-test.yml` H2 profile with a labeled test-only JWT secret.
+
+### Changed
+- `.env.example`: `JWT_EXPIRATION_MINUTES` → `JWT_EXPIRATION_SECONDS` (default 3600); added `CORS_ALLOWED_ORIGINS`; `DATABASE_*`/`JWT_SECRET` now required; profile `dev` → `local`.
+- Docs reconciled: public auth route standardized to `/api/v1/auth/**`; JWT TTL unit standardized to seconds (both had been inconsistent in the M0 docs).
+- `HealthControllerTest` now runs with security filters disabled (security exists as of M2).
+
+### Decisions
+- ADR-0003 — User and Role security model. ADR-0004 — JWT authentication strategy. ADR-0005 — Database migration & test-database strategy.
+
+### Verified (2026-08-21)
+- `./mvnw clean test` PASS (39/39) · `./mvnw verify` PASS · `./mvnw clean package` PASS.
+- Real HTTP (socket, `RANDOM_PORT`): register 201 · login 200+JWT · `/me` 200 with token / 401 without · admin 403 for USER, 200 for ADMIN · public routes reachable · sensitive actuator endpoints not exposed.
+- Secrets scan clean (only a labeled test-only JWT value committed).
+
+### Not included (later milestones)
+- Domain entities/CRUD (M3), Testcontainers-PostgreSQL (M3), Spring AI/Ollama (M4), tool registry (M5), agent orchestration (M6), Redis memory (M7), guardrails (M8), audit (M9), metrics (M10), login rate limiting & token rotation/revocation (later).
 
 ---
 

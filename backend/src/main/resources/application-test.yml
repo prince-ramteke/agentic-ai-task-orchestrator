@@ -1,8 +1,31 @@
-# Test profile — deterministic, quiet, no external infrastructure.
+# Test profile — deterministic, quiet, no external infrastructure (no Docker required).
+# Uses H2 in PostgreSQL-compatibility mode running the SAME Flyway migrations as production,
+# so the security suite is reproducible anywhere (see docs/ADR/0005-database-migration-strategy.md).
 
 spring:
   main:
     banner-mode: off
+  datasource:
+    url: jdbc:h2:mem:agentic;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+# Test-only, non-production JWT secret (>= 256 bits for HS256). NOT a real secret — safe to commit.
+security:
+  jwt:
+    secret: test-only-jwt-signing-secret-not-for-production-use-0123456789ABCDEF
+    expiration-seconds: 3600
+    issuer: agentic-ai-task-orchestrator
+  cors:
+    allowed-origins: http://localhost:5173
 
 logging:
   level:

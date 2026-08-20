@@ -5,6 +5,8 @@
 
 > **Milestone 1 status:** structured SLF4J/Logback logging is active with per-profile levels; Actuator exposes `health`+`info` only. Error responses carry a **per-response `traceId`** (a generated UUID, logged alongside the response) — a real, honest identifier, but **not** yet request-wide correlation. MDC-based correlation-ID propagation and the Micrometer/Prometheus/Grafana metrics below are PLANNED (M10).
 
+> **Milestone 2 status:** security-relevant events are logged (INFO: successful registration/login by user id; WARN: failed login attempts, unauthorized/forbidden requests, rejected bearer tokens by exception type). **Never logged:** passwords, password hashes, raw JWTs, or the JWT secret (`DATA_PRIVACY.md`). Login is logged by user id (and, on failure, the attempted email for brute-force analysis) — not the token or password.
+
 ## 1. Correlation & execution IDs
 
 - **`correlationId`** — one per HTTP request, generated at the edge (or accepted from a trusted header), attached to the logging MDC and propagated through the call.
