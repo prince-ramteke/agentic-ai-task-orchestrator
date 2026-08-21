@@ -1,12 +1,19 @@
 # Agent Architecture
 ## Agentic AI Task Orchestrator
 
-> Conceptual. The agent itself is not implemented (planned M6–M9). **As of M4**, only the LLM
-> *foundation* this design sits on exists: the `LlmClient` abstraction (`com.prince.agentic.ai.llm`)
-> with an Ollama implementation, `AiService`, prompt templates, structured-output validation, and an
-> AI exception model. There is **no** orchestrator, tool selection, tool registry, or ReAct loop yet —
-> M4 is deliberately "the model behind an interface", nothing more. The future agent will call
-> `LlmClient` (never a vendor SDK) and dispose over tools that wrap the M3 domain services.
+> Conceptual. The agent itself is not implemented (planned M6–M9). **As of M5**, the two deterministic
+> *foundations* this design sits on exist: the **LLM layer** (M4 — `LlmClient`/`AiService`, Ollama
+> behind an interface) and the **tool framework** (M5 — `com.prince.agentic.tool`: `Tool<I,O>`,
+> `ToolRegistry`, `ToolExecutor`, `ToolExecutionContext`, six registered tools wrapping the M3 domain
+> services). There is still **no** orchestrator, tool *selection*, ReAct loop, or Spring AI
+> tool-calling — the model cannot invoke anything yet. M6 adds the agent that calls `LlmClient` to
+> decide a step and drives the M5 `ToolExecutor`.
+>
+> **Foundational invariant (must hold through M6+):** the agent may never reach a repository,
+> `EntityManager`, arbitrary method, or code. Its only path to effects is:
+> `LLM → approved tool name → ToolRegistry → validated input → backend-built ToolExecutionContext →
+> role + resource authorization → domain service → result`. Identity comes from the authenticated
+> principal, never from model-supplied arguments (see `TOOL_SYSTEM.md`, `SECURITY.md`, ADR-0012).
 
 ## 1. What "agent" means here
 

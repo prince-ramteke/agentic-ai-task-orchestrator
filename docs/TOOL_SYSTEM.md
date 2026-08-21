@@ -1,10 +1,13 @@
 # Tool System
 ## Agentic AI Task Orchestrator
 
-> The contract every future tool must satisfy. **No tools are implemented yet (planned M5+).** M4
-> built the LLM layer *below* where tools will live (`LlmClient`/`AiService`), but deliberately no
-> tool registry, tool interface, or function-calling wiring — the model cannot invoke anything. Tools
-> arrive in M5 and sit **above** this layer, on the deterministic application side.
+> **Milestone 5 status: IMPLEMENTED.** The deterministic tool framework now exists in
+> `com.prince.agentic.tool`: `Tool<I,O>`, `ToolDescriptor`, `ToolRiskLevel`, `ToolExecutionContext`,
+> `ToolResult<O>`, a fail-fast immutable `ToolRegistry`, and a `ToolExecutor` enforcing the ordered
+> gates. Six tools are registered (see §7). The framework is **independent of Spring AI / `ai.*`**
+> (enforced by a test); the **agent that drives these tools is M6 PLANNED** — nothing here selects or
+> executes a tool autonomously yet. See ADR-0011/0012 and
+> `docs/superpowers/specs/2026-08-21-m5-tool-system-design.md`.
 
 ## 1. What a tool is
 
@@ -50,12 +53,14 @@ If any gate fails, the tool does not execute; the failure becomes an audited obs
 
 ## 4. Risk classification (security strictness increases with risk)
 
-| Class | Meaning | Examples (planned) | Required treatment |
+Enum `ToolRiskLevel` (implemented M5):
+
+| Class | Meaning | Examples | Required treatment |
 |---|---|---|---|
-| **Read-only** | No state change | `searchTasks`, `getTask`, `searchCustomer` | Auth + ownership filter; safe to retry. |
-| **Deterministic** | Pure computation, no I/O side effects | `calculate` | Validate inputs; no external effect. |
-| **Side-effecting** | Creates/updates state | `createTask`, `updateTask`, (future) `sendEmail` | Auth + ownership + validation + audit; idempotency where retryable. |
-| **High-risk** | Irreversible / destructive / external irreversible | `deleteTask`, `deleteCustomer`, external irreversible ops | All of the above **plus mandatory confirmation** before execution; strict audit. |
+| **`READ_ONLY`** | No state change | `task.get`, `task.search`, `customer.get`, `customer.search` | Auth + ownership filter (in the service); safe to retry. |
+| **`DETERMINISTIC`** | Pure computation, no I/O side effects | `math.calculate` | Validate inputs; no external effect. |
+| **`SIDE_EFFECTING`** | Creates/updates state | `task.create`, (future) `task.update` | Auth + ownership + validation + (M9) audit; idempotency where retryable. |
+| **`HIGH_RISK`** | Irreversible / destructive / external irreversible | (future) `task.delete`, `customer.delete` | All of the above **plus mandatory confirmation** (M8) before execution; strict audit. |
 
 ## 5. Argument trust
 
@@ -73,9 +78,45 @@ Arguments are model-generated and therefore **untrusted**. Every argument — es
 8. Add representative evaluation cases (`EVALUATION.md`).
 9. Document the tool here.
 
-## 7. Future tools (planned, not implemented)
+## 7. Registered tools (M5 IMPLEMENTED) + future
 
-`searchTasks` · `getTask` · `createTask` · `updateTask` · `deleteTask` · `searchCustomer` · `getCustomer` · `calculate` · (later) `sendEmail`, `calendar`, `knowledgeSearch`, `weather`. Each will be added only with the full contract above.
+**Registered now (least privilege — dot-namespaced names are the stable external identity):**
+
+| Name | Risk | Input | Output | Wraps |
+|---|---|---|---|---|
+| `task.get` | READ_ONLY | `{taskId}` | `TaskResponse` | `TaskService.get` |
+| `task.search` | READ_ONLY | `{status?,priority?,dueBefore?,page?,size?}` | `PageResponse<TaskSummaryResponse>` | `TaskService.list` |
+| `task.create` | SIDE_EFFECTING | `TaskCreateRequest` (no ownerId) | `TaskResponse` | `TaskService.create` |
+| `customer.get` | READ_ONLY | `{customerId}` | `CustomerResponse` | `CustomerService.get` |
+| `customer.search` | READ_ONLY | `{status?,search?,page?,size?}` | `PageResponse<CustomerSummaryResponse>` | `CustomerService.list` |
+| `math.calculate` | DETERMINISTIC | `{expression}` | `CalculationResult` | safe `ExpressionEvaluator` |
+
+Shared tools declare roles `{ROLE_USER, ROLE_ADMIN}` (any-of); resource ownership is enforced by the
+wrapped service. Search sort is not model-controllable in M5. `math.calculate` supports only
+`+ - * / ()`, decimals, and unary minus (no `eval`/`ScriptEngine`).
+
+**Deliberately NOT registered in M5** (least privilege): `task.update`, `task.delete`,
+`customer.create`, `customer.update`, `customer.delete`. Destructive/high-risk tools arrive with M8
+confirmation/guardrails. **Later:** `sendEmail`, `calendar`, `knowledgeSearch`, `weather`. Each is
+added only with the full contract above.
+
+## 7a. Execution pipeline & envelope (M5 IMPLEMENTED)
+
+`ToolExecutor.execute(name, Map<String,Object> rawArguments, ToolExecutionContext)` runs the ordered
+gates and returns a `ToolResult<O>` `{toolName, success, data, error{code,message}, durationMs}`:
+
+```
+resolve (registry) → authenticate (requiresAuthentication) → authorize (role, any-of)
+  → bind rawArguments → inputType (unknown properties rejected) → validate (Bean Validation)
+  → execute (domain service enforces ownership) → wrap ToolResult
+```
+
+Identity comes only from the context principal (built by the backend, never from arguments). Failures
+become `ToolResult` failures with stable codes: `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` (400),
+`TOOL_UNAUTHORIZED` (401), `TOOL_FORBIDDEN` (403), `TOOL_TIMEOUT` (504, reserved for M8),
+`TOOL_EXECUTION_FAILED` (500); a domain `ApiException` (e.g. `NOT_FOUND`) is surfaced with its own
+code. `TOOL_REGISTRATION_ERROR` fails application boot. Timeout is **metadata + measured duration** in
+M5; hard cancellation is M8. An ADMIN-only, read-only `GET /api/v1/tools` returns descriptor metadata.
 
 ## 8. Anti-patterns (never do)
 

@@ -1,6 +1,6 @@
 # Agentic AI Task Orchestrator
 
-> **Project status: 🟢 Milestone 4 — Spring AI + Ollama (complete & verified).** On top of the M3 domain, the app now has a clean, provider-agnostic **LLM foundation**: an `LlmClient` abstraction over local **Ollama** via **Spring AI 1.0.9** (Spring Boot stays 3.4.1), an `AiService` with validated structured output and bounded repair, an AI-specific error model, and two authenticated demo endpoints (`POST /api/v1/ai/generate`, `/classify`). Tests are deterministic and need no model (143 fast tests green + a **gated** live Ollama IT run against real `llama3.2`, 3/3). **This is the model behind an interface — not the agent** (no tools/planning yet; M5–M6). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+> **Project status: 🟢 Milestone 5 — Tool Registry & Execution Framework (complete & verified).** On top of the M4 LLM foundation, the app now has the deterministic **tool framework** the future agent will use: a typed, validated, authorized execution boundary (`Tool<I,O>`, `ToolDescriptor`, fail-fast immutable `ToolRegistry`, `ToolExecutor` returning a `ToolResult<O>` envelope) plus six least-privilege tools — `task.get/search/create`, `customer.get/search`, `math.calculate` (safe evaluator, no `eval`). Identity is backend-supplied (the model can never manufacture `userId`/`roles`); role authorization sits in the tool layer while resource ownership stays in the M3 services. An ADMIN-only `GET /api/v1/tools` lists tool metadata. The subsystem imports **no** Spring AI (enforced by a test). **This is the deterministic tool layer — not the agent** (no LLM tool-selection/orchestration yet; M6). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Overview
 
@@ -105,7 +105,8 @@ curl -X POST http://localhost:8080/api/v1/ai/generate -H "Authorization: Bearer 
 | Authentication & authorization (JWT, BCrypt, RBAC, user/role persistence) | ✅ Implemented & verified (M2) |
 | Core domain (tasks, customers — CRUD, ownership, pagination, PostgreSQL, Testcontainers) | ✅ Implemented & verified (M3) |
 | LLM foundation (`LlmClient` over Ollama via Spring AI, `AiService`, structured output, `/api/v1/ai/*`) | ✅ Implemented & verified (M4) |
-| Tool registry | ⬜ Planned (M5) |
+| Tool registry & execution framework (`Tool`/`ToolRegistry`/`ToolExecutor`, 6 tools, `/api/v1/tools`) | ✅ Implemented & verified (M5) |
+| Agent orchestration | ⬜ Planned (M6) |
 | Agent orchestration | ⬜ Planned (M6) |
 | Memory / guardrails / audit | ⬜ Planned (M7–M9) |
 | Observability | ⬜ Planned (M10) |

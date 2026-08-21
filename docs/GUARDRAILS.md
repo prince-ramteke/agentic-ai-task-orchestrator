@@ -3,6 +3,13 @@
 
 > Conceptual. Guardrails are planned (M8). None are implemented yet. Bounds are enforced by code, never by trusting the model.
 
+> **Milestone 5 note (hooks in place, enforcement deferred):** the M5 tool framework provides the
+> metadata M8 will enforce: every `ToolDescriptor` carries a `ToolRiskLevel`
+> (`READ_ONLY/DETERMINISTIC/SIDE_EFFECTING/HIGH_RISK`) and a `timeout`, and the `ToolExecutor` measures
+> per-call `durationMs`. M5 **does not** implement confirmation, hard timeout/cancellation, loop
+> detection, or rate limiting — destructive tools (`task.delete`, `customer.delete`) are simply **not
+> registered** yet (least privilege). M8 adds the enforcement layer on top of this classification.
+
 ## 1. Why guardrails exist
 
 The model is an untrusted planner. Guardrails are the deterministic bounds that make an agent run safe, terminating, and predictable regardless of what the model proposes.

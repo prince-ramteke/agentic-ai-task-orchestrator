@@ -148,6 +148,22 @@ failing. Provider/model metadata is server-supplied, never model output.
 **422 `LLM_INVALID_OUTPUT`** (model output failed validation after one repair). Input violations →
 **400 `VALIDATION_ERROR`**; unauthenticated → **401 `UNAUTHORIZED`**.
 
+### Tools endpoint (M5) — VERIFIED
+
+| Method | Path | Auth | Success | Notes |
+|---|---|---|---|---|
+| GET | `/api/v1/tools` | **ROLE_ADMIN** | 200 | Read-only list of registered tool descriptors (metadata only) |
+
+Each entry: `{ name, description, category, version, risk, requiresAuthentication, requiredRoles,
+inputType, outputType }` — `inputType`/`outputType` are **simple type names**, never implementation
+class names. USER → 403 `FORBIDDEN`; anonymous → 401. There is **no** tool-execution endpoint in M5;
+tools are invoked in-process via `ToolExecutor` and will be driven by the agent in M6.
+
+**Tool error codes** (surfaced inside `ToolResult` observations, and via the standard envelope if a
+tool exception ever reaches HTTP): `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` (400),
+`TOOL_UNAUTHORIZED` (401), `TOOL_FORBIDDEN` (403), `TOOL_TIMEOUT` (504, reserved for M8),
+`TOOL_EXECUTION_FAILED` (500). A domain error (e.g. `NOT_FOUND`) is preserved with its own code.
+
 ## 7. Planned endpoints (design only — not implemented)
 
 > Auth (M2), Task and Customer (M3) endpoints are **implemented** — see §6a. Only the agent

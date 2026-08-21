@@ -45,6 +45,8 @@ Milestone 1 dependencies: `spring-boot-starter-web`, `-actuator`, `-validation`,
 
 **Added in Milestone 4 (Spring AI / LLM foundation — IMPLEMENTED + VERIFIED):** `org.springframework.ai:spring-ai-starter-model-ollama`, versioned by the imported **`spring-ai-bom` 1.0.9** (`<spring-ai.version>` property). The 1.0.x line is the one compatible with Spring Boot 3.4.x; the BOM manages only `spring-ai-*` artifacts, so **Spring Boot stays 3.4.1** — no upgrade (ADR-0009, satisfying `CLAUDE.md` §32). Only the Ollama starter is added: **no** tool-calling/function modules, vector store, or Redis (those arrive with M5/M7). The model is reached solely through the project's own `LlmClient` abstraction (`OllamaLlmClient` is the only class importing `org.springframework.ai.*`, enforced by a test). Structured output uses Spring AI's converter, re-validated with Bean Validation (ADR-0010). Redis and any cloud provider are still **not** present.
 
+**Added in Milestone 5 (tool registry & execution framework — IMPLEMENTED + VERIFIED):** **no new dependencies.** The `com.prince.agentic.tool` framework (`Tool<I,O>`, `ToolDescriptor`, `ToolRegistry`, `ToolExecutor`, `ToolResult`, six tools, safe `ExpressionEvaluator`) is built entirely on existing Spring, Jackson (argument binding), Bean Validation, and Micrometer. It deliberately does **not** depend on Spring AI (enforced by a boundary test); the Spring AI tool-calling adapter is M6. Spring Boot stays 3.4.1. Redis, Kafka, and vector stores remain **not** present (ADR-0011/0012).
+
 ## Frontend (Milestone 13)
 
 React + Vite + TypeScript · Axios (typed API layer) · React Router. A component/styling system (Tailwind **or** MUI — pick one, stay consistent) chosen when the milestone starts.

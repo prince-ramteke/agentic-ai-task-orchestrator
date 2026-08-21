@@ -7,6 +7,19 @@
 
 > **Milestone 2 status (VERIFIED 2026-08-21):** **39 tests total, all green** under `./mvnw verify`. Security suite: `AuthIntegrationTest` (20, `@SpringBootTest` + MockMvc through the real filter chain — register/login/JWT/RBAC/error-envelopes/password-hash/DB-constraint), `AuthHttpSocketTest` (3, `RANDOM_PORT` + `TestRestTemplate` — **real socket-level HTTP** over embedded Tomcat), `JwtServiceTest` (4 — roundtrip, expired, malformed, forged signature), `AuthorizationServiceTest` (4 — owner/admin/other/null ownership). Tests run against **H2 in PostgreSQL-compat mode executing the production Flyway migrations** — reproducible without Docker (ADR-0005). Testcontainers-PostgreSQL integration is deferred to M3.
 
+> **Milestone 5 status (VERIFIED 2026-08-21):** the tool framework adds deterministic, fast tests
+> (no Ollama, mostly no Spring context): `ToolDescriptorTest`, `ToolExceptionTest`, `ToolRegistryTest`
+> (registration, duplicate/invalid-role fail-fast, immutable sorted view), `ToolExecutorTest` (the
+> full gate matrix: not-found/unauthorized/forbidden/invalid-input/unknown-property/domain-error/
+> unexpected), `AbstractToolContractTest` (reusable contract subclassed by every tool),
+> `ExpressionEvaluatorTest` + `CalculatorToolTest` (arithmetic, precedence, and rejection of
+> divide-by-zero, letters, and code-like input), and per-tool task/customer tests (mock the domain
+> service, assert the context principal is passed). Full-context tests on H2: `ToolSecurityTest`
+> (ownership 404-masking, admin-any-by-id, spoofed-owner rejected, anonymous unauthorized, destructive
+> tools not registered, all six registered) and `ToolCatalogApiTest` (`GET /api/v1/tools` — 200 ADMIN
+> metadata-only, 403 USER, 401 anon). `ToolArchitectureBoundaryTest` enforces no `ai.*`/persistence
+> imports. Coverage gate held; `tool/api/**` excluded (thin controller/DTOs).
+>
 > **Milestone 4 status (VERIFIED 2026-08-21):** **143 fast tests** (surefire; +44 for the AI layer),
 > all green under `./mvnw verify` with the coverage gate held (~88%). AI tests are deterministic and
 > **never touch a live model**: `AiServiceTest` (text/structured/validation-repair/invalid-output/

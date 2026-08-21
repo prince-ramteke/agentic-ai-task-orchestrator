@@ -3,6 +3,12 @@
 
 > Conceptual. The evaluation suite is planned (M11). This is a key differentiator: we evaluate **agent behavior**, not just HTTP 200.
 
+> **Milestone 5 note (scope boundary):** M5 provides **tool contract tests** (`AbstractToolContractTest`,
+> registry/executor/security tests) that guarantee each tool is well-formed, authorized, and safe. This
+> is **not** agent evaluation — scoring tool-*selection* accuracy, argument accuracy, and refusal
+> behavior over a dataset requires the agent (M6) and belongs to M11. M5 makes that future evaluation
+> easier by making tools explicit, typed, and individually testable.
+
 ## 1. Why evaluation (not just tests)
 
 Unit/integration tests prove the deterministic parts work. **Evaluation** measures whether the *agent* does the right thing when the (non-deterministic) model is in the loop: does it pick the right tools, with the right arguments, refuse what it should, and complete the task? A green build does not prove good agent behavior.

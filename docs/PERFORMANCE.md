@@ -3,6 +3,13 @@
 
 > Conceptual. No performance work or measurements exist yet. **Never cite a number that wasn't actually measured on this system.**
 
+> **Milestone 5 note (tool framework):** the `ToolRegistry` is built once at startup and is immutable
+> thereafter → **O(1)** name lookup on an unmodifiable map and inherent thread-safety for the
+> concurrent access M6 will bring. Argument binding (Jackson `convertValue`) and Bean Validation are
+> cheap relative to any DB call. Each tool declares a `timeout` and the executor measures `durationMs`,
+> but M5 does **not** hard-enforce timeouts (that is M8) and claims **no** measured numbers. No async,
+> pooling, or speculative concurrency introduced.
+>
 > **Milestone 4 note (LLM latency):** LLM calls are slow relative to normal backend ops, so every
 > call has an explicit **connect + read timeout** (`OLLAMA_TIMEOUT_SECONDS`, default 60s) and a
 > conservative retry (Spring AI `RetryTemplate`, max 2, transient only — never on 4xx/validation).

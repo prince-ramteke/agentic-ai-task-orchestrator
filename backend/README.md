@@ -1,11 +1,12 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 4** it provides the backend foundation, the
+Spring Boot backend module. Through **Milestone 5** it provides the backend foundation, the
 authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
-domains (CRUD, ownership, pagination, PostgreSQL), and the **LLM foundation** — an `LlmClient`
-abstraction over local **Ollama** via **Spring AI 1.0.9**, with `AiService`, validated structured
-output, and authenticated `/api/v1/ai/*` demo endpoints. **No tool registry or agent yet** (M5–M6;
-see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+domains (CRUD, ownership, pagination, PostgreSQL), the **LLM foundation** (`LlmClient` over local
+**Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), and the **tool framework** — a
+typed, validated, authorized execution boundary (`Tool`/`ToolDescriptor`/`ToolRegistry`/`ToolExecutor`)
+with six least-privilege tools and an ADMIN `/api/v1/tools` catalog. **No agent/LLM tool-calling yet**
+(M6; see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -49,6 +50,7 @@ Default port: `8080`. Default profile: `local`. Flyway applies the schema at sta
 | `GET/POST /api/v1/tasks` · `GET/PUT/DELETE /api/v1/tasks/{id}` | Bearer | User-owned tasks (CRUD, pagination, filters) |
 | `GET/POST /api/v1/customers` · `GET/PUT/DELETE /api/v1/customers/{id}` | Bearer | User-owned customers (CRUD, search) |
 | `POST /api/v1/ai/generate` · `POST /api/v1/ai/classify` | Bearer | LLM text + typed classification (M4; needs Ollama, else `503 LLM_UNAVAILABLE`) |
+| `GET /api/v1/tools` | ADMIN | Registered tool metadata (M5; read-only) |
 | `GET /api/v1/health` · `/actuator/health` · `/actuator/info` | public | Liveness / metadata |
 | `GET /swagger-ui.html` | public | Swagger UI (click **Authorize** to send a JWT) |
 
@@ -81,6 +83,10 @@ com.prince.agentic
 ├── ai/                           # M4 LLM layer: AiController, AiService, dto/, prompt/PromptService,
 │                                 #   llm/ (LlmClient abstraction, exception model, ollama/OllamaLlmClient),
 │                                 #   config/ (LlmProperties, AiConfig) — only ai.llm.ollama imports Spring AI
+├── tool/                         # M5 tool framework: Tool, ToolDescriptor, ToolRiskLevel, ToolExecutionContext,
+│                                 #   ToolResult, ToolRegistry, ToolExecutor, exception/, math/ (safe calculator),
+│                                 #   task/ + customer/ (domain tools), api/ (ADMIN GET /api/v1/tools).
+│                                 #   Imports no ai.*/persistence (enforced by ToolArchitectureBoundaryTest)
 ├── common/query/                 # SortWhitelist (page/size clamp + sort whitelist)
 └── health/                       # HealthController, HealthResponse
 
@@ -99,7 +105,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Tool registry (M5), the agent runtime (M6+), Redis (M7), guardrails (M8), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (Spring AI/Ollama landed in M4 — the `LlmClient` layer only, no tools or agent.)
+The agent runtime and Spring AI tool-calling adapter (M6), Redis (M7), guardrails/confirmation (M8), durable agent/tool audit (M9), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (The M5 tool framework landed with **no new dependencies** — the deterministic tools only; the agent that drives them is M6.)
 
 ## Docker
 

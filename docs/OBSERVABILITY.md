@@ -5,6 +5,13 @@
 
 > **Milestone 1 status:** structured SLF4J/Logback logging is active with per-profile levels; Actuator exposes `health`+`info` only. Error responses carry a **per-response `traceId`** (a generated UUID, logged alongside the response) — a real, honest identifier, but **not** yet request-wide correlation. MDC-based correlation-ID propagation and the Micrometer/Prometheus/Grafana metrics below are PLANNED (M10).
 
+> **Milestone 5 status:** the tool framework emits `tool.execution.duration` (timer) and
+> `tool.execution.result` (counter), tagged `tool`/`risk`/`outcome` (bounded cardinality), via the
+> existing `MeterRegistry`. `ToolExecutor` logs completion at INFO with metadata only
+> (`tool.exec tool=… risk=… outcome=… durationMs=… user=<id>`); tool arguments are **never** logged in
+> full. Tool `durationMs` is measured but **no latency numbers are claimed**. Durable tool/agent audit
+> records are **not** written in M5 (M9); dashboards remain PLANNED (M10).
+>
 > **Milestone 4 status:** the AI layer emits the first **Micrometer** metrics — `llm.request.duration`
 > (timer) and `llm.request.result` (counter), tagged `op`/`provider`/`model`/`outcome` (bounded
 > cardinality) — via the existing `MeterRegistry`. `AiService` logs completion at INFO with metadata

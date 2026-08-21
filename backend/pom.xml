@@ -260,6 +260,8 @@
                         <!-- M4: provider-specific wiring/config (infra, exercised by the gated live IT, not unit-tested). -->
                         <exclude>com/prince/agentic/ai/config/**</exclude>
                         <exclude>com/prince/agentic/ai/llm/ollama/**</exclude>
+                        <!-- M5: thin tool catalog controller/DTOs (covered by ToolCatalogApiTest, not unit logic). -->
+                        <exclude>com/prince/agentic/tool/api/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

@@ -12,7 +12,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 2 | Authentication & Authorization | ✅ |
 | 3 | Core Domain | ✅ |
 | 4 | Spring AI Integration | ✅ |
-| 5 | Tool Registry | ⬜ |
+| 5 | Tool Registry | ✅ |
 | 6 | Agent Orchestration | ⬜ |
 | 7 | Memory | ⬜ |
 | 8 | Guardrails | ⬜ |
@@ -69,13 +69,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `TECH_STACK.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `DATA_PRIVACY.md`, `SECURITY.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `API.md`, `TESTING.md`, `DEPLOYMENT.md`, `.env.example`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
 - **Deferred:** tool registry/tool-calling (M5), agent orchestration (M6), Redis/memory (M7), guardrails/confirmation (M8), agent audit (M9), Prometheus/Grafana dashboards (M10), cloud fallback provider (documented future).
 
-### Milestone 5 — Tool Registry ⬜
-- **Objective:** Explicit, typed, authorized, audited tool contract and registry with the first read-only + deterministic tools.
+### Milestone 5 — Tool Registry ✅
+- **Objective:** Explicit, typed, authorized tool contract and registry with the first read-only + deterministic tools.
 - **Prerequisites:** M4, M3.
-- **Outputs:** tool interface + registry; `searchTasks`, `getTask`, `calculate`; per-tool input/output schemas, validation, authorization, side-effect classification, audit hook.
-- **Validation:** tool unit tests incl. argument validation + authorization refusal; registry only exposes permitted tools.
-- **Docs:** `TOOL_SYSTEM.md`, `AUDIT_LOGGING.md`, `CHANGELOG.md`.
-- **DoD:** every tool meets the contract in `TOOL_SYSTEM.md`.
+- **Delivered (IMPLEMENTED + VERIFIED):** `com.prince.agentic.tool` framework — `Tool<I,O>`, `ToolDescriptor`, `ToolRiskLevel` (`READ_ONLY/DETERMINISTIC/SIDE_EFFECTING/HIGH_RISK`), `ToolExecutionContext` (identity from the authenticated principal, never arguments), `ToolResult<O>` envelope, fail-fast immutable `ToolRegistry` (O(1)), `ToolExecutor` (ordered gates: resolve→authenticate→authorize→bind→validate→execute→wrap; unknown args rejected), tool exception model (`TOOL_*` via `ApiException`). Six tools: `task.get`, `task.search`, `task.create`, `customer.get`, `customer.search`, `math.calculate` (safe evaluator, no `eval`). Two-layer authz (role any-of in the executor + resource ownership delegated to the M3 services — ADR-0012). ADMIN read-only `GET /api/v1/tools`. `tool.execution.*` Micrometer metrics. Boundary test enforces independence from `ai.*`/persistence. **No** agent/LLM tool-calling/Redis/guardrails/durable-audit.
+- **Validation (VERIFIED 2026-08-21):** `./mvnw clean test` PASS; `./mvnw clean verify` PASS with the coverage gate held. Tool contract test (`AbstractToolContractTest`) applied to every tool; executor gate matrix (not-found/unauthorized/forbidden/invalid-input/domain-error/unexpected); security IT over real services on H2 (ownership 404-masking, admin-any-by-id, spoofed-owner rejected, anonymous unauthorized, destructive tools not registered); calculator arithmetic + malformed/dangerous rejection; ADMIN/USER/anonymous on `GET /api/v1/tools`. No Ollama needed.
+- **Decisions:** ADR-0011 (tool abstraction & registry), ADR-0012 (tool authorization & execution-context boundary).
+- **Docs updated:** `TOOL_SYSTEM.md`, `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `GUARDRAILS.md`, `EVALUATION.md`, `OBSERVABILITY.md`, `API.md`, `TESTING.md`, `PERFORMANCE.md`, `TECH_STACK.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
+- **Deferred:** agent orchestration (M6), Redis/memory (M7), guardrails/confirmation/hard-timeout (M8), durable tool/agent audit tables (M9), update/delete tools, Spring AI tool-calling adapter (M6).
 
 ### Milestone 6 — Agent Orchestration ⬜
 - **Objective:** The orchestration loop: decision → tool selection → authorization → validation → execution → observation → next decision → completion.

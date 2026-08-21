@@ -57,12 +57,13 @@ Related ADRs, docs, issues.
 | ADR-0008 | Testcontainers PostgreSQL integration testing | M3 | Accepted |
 | ADR-0009 | LLM provider abstraction & Ollama local-default strategy | M4 | Accepted |
 | ADR-0010 | Structured LLM output strategy | M4 | Accepted |
+| ADR-0011 | Tool abstraction & registry | M5 | Accepted |
+| ADR-0012 | Tool authorization & execution-context boundary | M5 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Tool authorization model | M5 |
 | Agent orchestration model | M6 |
 | Redis for conversation/execution memory | M7 |
 | Confirmation policy for dangerous operations | M8 |

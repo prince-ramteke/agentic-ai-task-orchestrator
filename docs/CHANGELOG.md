@@ -9,7 +9,29 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 5 — Tool Registry & Tool Execution Framework (not started)._
+_Next: Milestone 6 — Agent Orchestration (not started)._
+
+---
+
+## [0.0.5] — 2026-08-21 — Milestone 5: Tool Registry & Tool Execution Framework
+
+### Added
+- **Tool framework** (`com.prince.agentic.tool`): `Tool<I,O>` (handler returns raw `O`), `ToolDescriptor` (name, description, category, version, `ToolRiskLevel`, requiresAuthentication, requiredRoles, input/output `Class`, timeout — compact-ctor validated), `ToolRiskLevel` (`READ_ONLY/DETERMINISTIC/SIDE_EFFECTING/HIGH_RISK`), `ToolExecutionContext` (identity from the authenticated principal; backend-built, never from arguments), `ToolResult<O>` + `ToolError` envelope.
+- **`ToolRegistry`** — fail-fast (duplicate name / invalid role / null handler → `ToolRegistrationException`, fails boot), immutable after startup, O(1) lookup, name-sorted descriptor view.
+- **`ToolExecutor`** — ordered gates `resolve → authenticate → authorize (role, any-of) → bind → validate → execute → wrap`; unknown argument properties rejected (`FAIL_ON_UNKNOWN_PROPERTIES`); domain `ApiException` surfaced with its code; `tool.execution.duration`/`tool.execution.result` Micrometer metrics; metadata-only logging.
+- **Tool exception model** (`TOOL_NOT_FOUND`/`TOOL_INVALID_INPUT`/`TOOL_UNAUTHORIZED`/`TOOL_FORBIDDEN`/`TOOL_TIMEOUT`/`TOOL_EXECUTION_FAILED` via `ApiException`; `TOOL_REGISTRATION_ERROR` fails boot).
+- **Six tools** (one class each): `task.get`, `task.search`, `task.create` (reuses `TaskCreateRequest`, no ownerId), `customer.get`, `customer.search`, `math.calculate`. Domain tools wrap `TaskService`/`CustomerService` and pass the context principal — ownership/404-masking/admin-any-by-id inherited. `math.calculate` uses a safe recursive-descent `ExpressionEvaluator` (`+ - * / ()`, decimals, unary minus) — **no** `ScriptEngine`/`eval`/`Runtime.exec`/`ProcessBuilder`.
+- **ADMIN read-only `GET /api/v1/tools`** — descriptor metadata only (no implementation class names).
+- **Tests:** `ToolDescriptorTest`, `ToolExceptionTest`, `ToolRegistryTest`, `ToolExecutorTest` (gate matrix), `AbstractToolContractTest` (reusable contract, subclassed per tool), `ExpressionEvaluatorTest`, `CalculatorToolTest`, task/customer tool tests, `ToolSecurityTest` (full-context ownership/role IT on H2), `ToolCatalogApiTest`, `ToolArchitectureBoundaryTest` (no `ai.*`/persistence imports).
+
+### Changed
+- `pom.xml`: JaCoCo excludes += `com/prince/agentic/tool/api/**` (thin controller/DTOs). **No new dependencies** — the framework uses existing Spring/Jackson/Micrometer. Spring Boot stays 3.4.1.
+
+### Security
+- Identity is backend-supplied via `ToolExecutionContext`; the model can never manufacture `userId`/`roles`. Two authorization layers: role (any-of, in the executor) + resource ownership (in the domain service). Fail-closed ordered gates; bounded inputs; safe calculator; ADMIN-only catalog. The tool subsystem imports no Spring AI. (ADR-0012.)
+
+### Docs
+- ADR-0011 (tool abstraction & registry), ADR-0012 (tool authorization & execution-context boundary); updated `TOOL_SYSTEM`, `AGENT_ARCHITECTURE`, `SECURITY`, `GUARDRAILS`, `EVALUATION`, `OBSERVABILITY`, `API`, `TESTING`, `PERFORMANCE`, `TECH_STACK`, `ROADMAP`, `README`, `backend/README`. Reconciled two prior doc statements: risk-enum names and dot-namespaced tool names.
 
 ---
 

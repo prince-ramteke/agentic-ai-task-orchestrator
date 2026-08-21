@@ -1,6 +1,19 @@
 # Security Model
 ## Agentic AI Task Orchestrator
 
+> **Milestone 5 status (tool framework):** the tool subsystem establishes the security boundary the
+> M6 agent will rely on. **Identity is backend-supplied** — `ToolExecutionContext` is built from the
+> authenticated principal, never from tool arguments; inputs carry no identity field and unknown
+> argument properties (a spoofed `ownerId`/`userId`) are rejected as `TOOL_INVALID_INPUT`. **Two
+> authorization layers:** role/tool-type (any-of, in the `ToolExecutor`) and resource ownership
+> (delegated to `TaskService`/`CustomerService` — so admin-any-by-id and 404-masking are preserved).
+> Ordered, **fail-closed** gates run authorization/validation before execution. One capability per
+> tool (no arbitrary dispatch), a safe calculator (no `eval`/`ScriptEngine`), bounded inputs, an
+> immutable fail-fast registry (no poisoning/duplicate-shadowing), and an ADMIN-only, metadata-only
+> `GET /api/v1/tools`. The subsystem imports no Spring AI. Threats defended: arbitrary method/code
+> execution, tool impersonation, role/owner spoofing, unauthorized invocation, argument injection,
+> privilege escalation, registry poisoning (ADR-0012). Human-confirmation for high-risk tools is M8.
+>
 > **Milestone 4 status (AI layer):** `/api/v1/ai/**` is authenticated by the existing deny-by-default
 > policy (no `PUBLIC_ENDPOINTS` change; a 401 test guards it). Input is bounded and validated
 > (`@NotBlank`, ≤4000 → 400). The AI layer performs **no** database access, ownership decisions, or
