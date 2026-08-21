@@ -125,3 +125,7 @@ M5; hard cancellation is M8. An ADMIN-only, read-only `GET /api/v1/tools` return
 - A tool returning raw model text as its output.
 - A high-risk tool that executes without confirmation.
 - A tool whose arguments are used before validation.
+
+## Milestone 6 — Agent tool catalog & side-effect note
+
+M6 adds `AgentToolCatalog`, an agent-owned adapter that derives a model-readable catalog **reflectively from `ToolRegistry.descriptors()`** (name, description, category, risk, input field names/types + enum values) — the registry stays the single source of truth; M5 gains no agent or Spring AI dependency. Every agent tool call still goes through `ToolExecutor` (resolve → role authz → bind → validate → execute → wrap). **Side-effecting tools are not automatically idempotent and are never auto-retried by the orchestrator**; the exact M5 `ToolResult` is preserved as the observation. The human-confirmation workflow for side-effecting/irreversible tools arrives in M8.

@@ -56,3 +56,7 @@ Performance claims (in docs, README, or a resume) are labeled MEASURED and cite 
 ## 5. Testing
 
 Benchmarks/load tests are separate from the correctness suite and are not gated in CI unless made deterministic. Record methodology so results are reproducible.
+
+## Milestone 6 — Agent latency (measured, not claimed)
+
+An agent run is inherently slower than a plain endpoint (multiple LLM round-trips + tool calls). M6 **measures** and returns `durationMs` per run and records `agent.execution.duration` (Micrometer); it makes **no** unmeasured latency claim. The whole run shares one wall-clock deadline (`AGENT_TIMEOUT_SECONDS`, computed once); observations are size-bounded to keep prompt/context growth in check. Hard per-tool timeouts and rate limiting are M8.

@@ -1,13 +1,19 @@
 # Agent Architecture
 ## Agentic AI Task Orchestrator
 
-> Conceptual. The agent itself is not implemented (planned M6–M9). **As of M5**, the two deterministic
-> *foundations* this design sits on exist: the **LLM layer** (M4 — `LlmClient`/`AiService`, Ollama
-> behind an interface) and the **tool framework** (M5 — `com.prince.agentic.tool`: `Tool<I,O>`,
-> `ToolRegistry`, `ToolExecutor`, `ToolExecutionContext`, six registered tools wrapping the M3 domain
-> services). There is still **no** orchestrator, tool *selection*, ReAct loop, or Spring AI
-> tool-calling — the model cannot invoke anything yet. M6 adds the agent that calls `LlmClient` to
-> decide a step and drives the M5 `ToolExecutor`.
+> **As of M6 the orchestration loop is IMPLEMENTED** (`com.prince.agentic.agent`): `AgentOrchestrator`
+> calls `LlmClient.generateStructured` to obtain a typed `AgentDecision`, validates it, and drives the
+> M5 `ToolExecutor` — bounded by cooperative iteration/tool-call budgets, one wall-clock deadline, a
+> cooperative `CancellationToken`, and fingerprint loop detection, exposed at
+> `POST /api/v1/agent/execute`. It builds on the two deterministic foundations: the **LLM layer** (M4 —
+> `LlmClient`/`AiService`, Ollama behind an interface) and the **tool framework** (M5 —
+> `com.prince.agentic.tool`: `Tool<I,O>`, `ToolRegistry`, `ToolExecutor`, `ToolExecutionContext`, six
+> registered tools wrapping the M3 domain services).
+>
+> Still **planned**: Redis conversation/session memory (M7); **hard** guardrail enforcement, the
+> human-confirmation workflow, hard timeout/interruption, and rate limiting (M8); durable audit tables
+> and a `GET` execution-retrieval endpoint (M9). Where sections below describe Redis-backed state,
+> confirmation, or durable execution records, treat those as the M7–M9 target, not current behavior.
 >
 > **Foundational invariant (must hold through M6+):** the agent may never reach a repository,
 > `EntityManager`, arbitrary method, or code. Its only path to effects is:

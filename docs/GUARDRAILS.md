@@ -10,18 +10,30 @@
 > detection, or rate limiting — destructive tools (`task.delete`, `customer.delete`) are simply **not
 > registered** yet (least privilege). M8 adds the enforcement layer on top of this classification.
 
+> **Milestone 6 note (cooperative bounds IMPLEMENTED; hard enforcement still M8):** the M6
+> `AgentOrchestrator` implements the **cooperative, in-loop** forms of the bounds below — iteration
+> budget, tool-call budget, a single shared wall-clock deadline (computed once), a cooperative
+> `CancellationToken`, and fingerprint-based loop detection — all checked **between** steps so no
+> unbounded execution path exists. M6 does **not** hard-interrupt an in-flight LLM/tool call, and does
+> **not** implement the human-confirmation workflow or rate limiting. **M8 adds the hard enforcement**:
+> per-tool hard timeout/interruption, confirmation for side-effecting/irreversible tools, rate limiting,
+> and retry hardening. See ADR-0014.
+
 ## 1. Why guardrails exist
 
 The model is an untrusted planner. Guardrails are the deterministic bounds that make an agent run safe, terminating, and predictable regardless of what the model proposes.
 
 ## 2. The guardrail set
 
+Legend: **[M6]** cooperative, checked between steps (implemented now); **[M8]** hard enforcement (planned).
+
 | Guardrail | Rule | Default (env) | On breach |
 |---|---|---|---|
-| **Max tool calls** | Cap the number of tool executions per run | `AGENT_MAX_TOOL_CALLS=10` | Stop; return partial summary marked incomplete; audit. |
-| **Execution timeout** | Cap wall-clock time per run | `AGENT_TIMEOUT_SECONDS=60` | Stop at next safe point; audit. |
-| **Retry limit** | Cap retries per failing step | `AGENT_MAX_RETRIES=2` | Fail the step gracefully; audit. |
-| **Loop detection** | Detect repeated identical/duplicate tool calls or non-progress | — | Halt with a clear reason; audit. |
+| **Max iterations** [M6] | Cap the number of LLM decision steps per run | `AGENT_MAX_ITERATIONS=8` | Stop; 200 + `AGENT_ITERATION_LIMIT`; metric `agent.limit.reached`. |
+| **Max tool calls** [M6] | Cap the number of tool executions per run | `AGENT_MAX_TOOL_CALLS=10` | Stop; 200 + `AGENT_TOOL_CALL_LIMIT`; metric `agent.limit.reached`. |
+| **Execution timeout** [M6 cooperative / M8 hard] | Cap wall-clock time per run (one deadline, computed once) | `AGENT_TIMEOUT_SECONDS=60` | M6: stop at next step, 200 + `AGENT_TIMEOUT`. M8: hard interrupt. |
+| **Loop detection** [M6] | Detect repeated identical tool calls (tool + canonical args, threshold) | `AGENT_LOOP_THRESHOLD=2` | Halt; 200 + `AGENT_LOOP_DETECTED`; metric `agent.loop.detected`. |
+| **Retry limit** [M8] | Cap retries per failing step (M6 does one bounded *decision* repair only; side-effect tools never auto-retried) | `AGENT_MAX_RETRIES=2` *(planned)* | Fail the step gracefully; audit. |
 | **Argument validation** | Validate every model argument before use | always on | Reject; return as observation; audit. |
 | **Permission checks** | Authorize before any effect | always on | Deny; return as observation; audit. Never bypass. |
 | **Confirmation** | Dangerous/irreversible ops require explicit confirmation | always on for high-risk | Do not execute; surface confirmation request. |

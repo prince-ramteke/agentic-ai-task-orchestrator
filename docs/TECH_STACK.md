@@ -68,3 +68,7 @@ React + Vite + TypeScript · Axios (typed API layer) · React Router. A componen
 - One datastore role per store: Postgres durable, Redis ephemeral — never blurred.
 - The model stays behind an abstraction; vendors are swappable, features aren't coupled to a vendor SDK.
 - Add a dependency only with a stated reason; record significant choices as ADRs.
+
+## Milestone 6 — Agent Orchestration (no new dependencies)
+
+M6 added the `com.prince.agentic.agent` layer (orchestrator, planner, decision contract, tool-catalog adapter, bounded observations, cooperative budgets, loop detection, `POST /api/v1/agent/execute`) using **only existing dependencies**: Spring Web/Security/Validation, Jackson, Micrometer, the M4 `LlmClient`, and JUnit 5/Mockito/Testcontainers for tests. No new runtime or test dependency, no Flyway migration, no datastore. Spring AI stays confined to `OllamaLlmClient`; the agent uses the `LlmClient` abstraction. See ADR-0013…0016.

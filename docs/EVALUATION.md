@@ -68,3 +68,7 @@ A prompt change or tool-selection change is a **behavior change**: re-run the su
 ## 6. Honesty
 
 Only report scores from an actual run. Never claim an evaluation result that wasn't produced. Label results MEASURED with the date/model used.
+
+## Milestone 6 — Deterministic scenario tests (full harness deferred)
+
+M6 ships deterministic, fake-driven behavior tests in place of a scored evaluation harness: `AgentOrchestratorTest` covers tool-selection, argument passing, refusal/limit/timeout/loop/cancellation paths, and side-effect-retry safety over a `ScriptedLlmClient`; `AgentExecuteIT` covers the authorized end-to-end path and the security cases. A representative scored **evaluation dataset/harness** (tool-selection accuracy, argument accuracy, unauthorized-action refusal rates) remains **deferred**. Prompt changes are behavior changes: `resources/prompts/agent-system.st` is versioned and reviewed with the code.

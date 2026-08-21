@@ -46,3 +46,7 @@ The in-flight `exec:{executionId}` state in Redis is the *working memory* of a r
 ## 6. Testing
 
 Redis-dependent behavior is tested with Testcontainers Redis (`TESTING.md`): TTL expiry, execution-state transitions, cache hit/miss, and the guarantee that no durable data is written only to Redis.
+
+## Milestone 6 — Single-request execution (no Redis yet)
+
+M6 is **single-request, single-execution** orchestration. `AgentExecution` holds run state (ids, deadline, counters, ordered observations) **in memory** for the lifetime of one `POST /api/v1/agent/execute` call; each request starts a fresh `executionId` and state. There is **no** Redis, no cross-request conversation memory, and no persisted execution state. Redis-backed conversation/session/execution state is **M7**.

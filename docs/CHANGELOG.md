@@ -9,7 +9,31 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 6 — Agent Orchestration (not started)._
+_Next: Milestone 7 — Memory (Redis conversation/session/execution state). Not started._
+
+---
+
+## [0.0.6] — 2026-08-21 — Milestone 6: Agent Orchestration
+
+### Added
+- **Agent layer** (`com.prince.agentic.agent`): `AgentOrchestrator` — a bounded, backend-controlled loop that turns one authenticated request into a sequence of registered-tool executions (decision → validate → execute → observe → repeat until `FINAL` or a bound trips). The model proposes; the backend disposes.
+- **Typed decision contract:** `AgentDecision(action, response, tool, arguments)` / `AgentAction {FINAL, TOOL_CALL}`, produced via the existing M4 `LlmClient.generateStructured` (no M4 change) with one bounded repair; `AgentDecisionValidator` rejects malformed combinations.
+- **Tool catalog adapter:** `AgentToolCatalog` derives model-facing tool definitions **reflectively from the M5 `ToolRegistry`** (name, description, category, risk, input fields + enum values) — no hardcoded tool list, no Spring AI in the tool layer.
+- **Bounded observations:** `AgentObservation` + `ObservationSerializer` (caps chars and array items; `PageResponse` shaped) — a raw `ToolResult` is never fed to the prompt.
+- **Cooperative bounds** (checked between steps): `AgentProperties` — max iterations (`AGENT_MAX_ITERATIONS`=8), max tool calls (`AGENT_MAX_TOOL_CALLS`=10), one shared wall-clock deadline (`AGENT_TIMEOUT_SECONDS`=60, computed once), `CancellationToken`/`DeadlineCancellationToken`, and `LoopDetector` (fingerprint = tool + canonical args, `AGENT_LOOP_THRESHOLD`=2). No unbounded execution path.
+- **Endpoint** `POST /api/v1/agent/execute` (authenticated, deny-by-default) → `AgentExecuteResponse{executionId, status, response, iterations, toolCalls, durationMs, failureCode?}`. Started runs that terminate in a controlled state return **200** with a stable `failureCode`; only pre-execution request/auth faults use the `ApiError` envelope. Request body carries only `message` (≤4000).
+- **Prompt:** versioned `resources/prompts/agent-system.st`, rendered by `AgentPromptService` with untrusted text (user message, observations) only in delimited slots.
+- **Metrics** (orchestration-level only, no double-counting M5): `agent.execution.duration`/`agent.execution.count` (tag status), `agent.iterations`, `agent.tool.calls`, `agent.loop.detected`, `agent.limit.reached`.
+- **Tests:** unit (`AgentDecisionValidatorTest`, `LoopDetectorTest`, `DeadlineCancellationTokenTest`, `AgentExecutionTest`, `ObservationSerializerTest`, `AgentToolCatalogTest`, `AgentPropertiesTest`, `AgentPlannerTest`, `AgentExceptionTest`), orchestrator scenarios over a deterministic `ScriptedLlmClient` (`AgentOrchestratorTest` — direct FINAL, single/multi tool call, invalid-decision repair, tool-not-found/unauthorized/failure observations, iteration/tool-call limits, loop detection, timeout, cancellation, side-effect-retry safety), the full Testcontainers-Postgres `AgentExecuteIT` (own-data, cross-user 404, admin any-by-id, identity-spoof ignored, unregistered tool not executed, 401), `AgentControllerTest`, and `AgentArchitectureBoundaryTest` (agent.* imports no repository/`EntityManager`/`JdbcTemplate`/domain service/Spring AI — only the `ai.llm` abstraction). `verify` needs no live Ollama.
+
+### Changed
+- `docs/GUARDRAILS.md`, `docs/ROADMAP.md`, `docs/AGENT_ARCHITECTURE.md`, `docs/API.md`: record the M6 cooperative-bounds / M8 hard-enforcement split and the `POST /api/v1/agent/execute` endpoint (superseding the `/api/agent/chat` placeholder).
+
+### Security
+- The LLM remains an untrusted planner: identity is always the authenticated principal (never model/body-supplied), every effect flows through the M5 `ToolExecutor` (role + ownership authorization preserved), unregistered tool names cannot execute, and side-effecting tools are never auto-retried.
+
+### Docs
+- ADR-0013 (agent decision contract), ADR-0014 (execution loop & cooperative budgets), ADR-0015 (agent/tool orchestration boundary), ADR-0016 (loop detection).
 
 ---
 

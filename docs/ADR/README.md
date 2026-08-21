@@ -59,12 +59,15 @@ Related ADRs, docs, issues.
 | ADR-0010 | Structured LLM output strategy | M4 | Accepted |
 | ADR-0011 | Tool abstraction & registry | M5 | Accepted |
 | ADR-0012 | Tool authorization & execution-context boundary | M5 | Accepted |
+| ADR-0013 | Agent decision contract | M6 | Accepted |
+| ADR-0014 | Agent execution loop & cooperative budgets | M6 | Accepted |
+| ADR-0015 | Agent / tool orchestration boundary | M6 | Accepted |
+| ADR-0016 | Agent loop detection | M6 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Agent orchestration model | M6 |
 | Redis for conversation/execution memory | M7 |
 | Confirmation policy for dangerous operations | M8 |
 

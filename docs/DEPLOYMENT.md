@@ -108,3 +108,7 @@ Secrets management (a real secret store, not `.env`), backups for Postgres, migr
 ## 9. CI/CD
 
 GitHub Actions builds and tests on every PR (backend `mvn verify`, frontend build/test). Branch protection requires green checks. Never merge with red CI (`.claude/rules/git.md`).
+
+## Milestone 6 — Agent environment variables
+
+The agent bounds are env-tunable (defaults shown; see `.env.example`): `AGENT_MAX_ITERATIONS=8`, `AGENT_MAX_TOOL_CALLS=10`, `AGENT_TIMEOUT_SECONDS=60`, `AGENT_LOOP_THRESHOLD=2`, `AGENT_MAX_OBSERVATION_CHARS=2000`, `AGENT_MAX_ARRAY_ITEMS=20`. `AGENT_MAX_RETRIES` is reserved for M8 (step-retry enforcement) and is not yet honored. The agent adds no new infrastructure (no Redis/queue/datastore in M6).

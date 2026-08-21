@@ -1,12 +1,17 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 5** it provides the backend foundation, the
+Spring Boot backend module. Through **Milestone 6** it provides the backend foundation, the
 authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
 domains (CRUD, ownership, pagination, PostgreSQL), the **LLM foundation** (`LlmClient` over local
-**Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), and the **tool framework** — a
+**Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), the **tool framework** — a
 typed, validated, authorized execution boundary (`Tool`/`ToolDescriptor`/`ToolRegistry`/`ToolExecutor`)
-with six least-privilege tools and an ADMIN `/api/v1/tools` catalog. **No agent/LLM tool-calling yet**
-(M6; see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+with six least-privilege tools and an ADMIN `/api/v1/tools` catalog — and, as of **M6**, the **agent**:
+`AgentOrchestrator`, a bounded, backend-controlled loop (`com.prince.agentic.agent`) that drives the
+M5 `ToolExecutor` from a validated, LLM-produced `AgentDecision`, exposed at `POST /api/v1/agent/execute`.
+The LLM is an untrusted planner; identity is always the authenticated principal; the run is bounded by
+cooperative iteration/tool-call budgets, one deadline, a cancellation seam, and loop detection.
+**Hard** guardrails/confirmation/rate-limiting are **M8**; Redis memory **M7**; durable audit **M9**
+(see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 

@@ -51,3 +51,7 @@ Audit records are append-only in application semantics (no update/delete via the
 ## 7. Testing
 
 Assert that: every side-effecting tool call produces an audit record with the required fields; authorization denials are audited; no secret/PII appears in any audit record; admin retrieval is RBAC-gated (`TESTING.md`).
+
+## Milestone 6 — Agent logging (durable audit still M9)
+
+M6 emits structured SLF4J logs and Micrometer metrics keyed by `executionId`/`requestId` (decision action, chosen tool name, status, iterations, tool calls, duration) — never full prompts, arguments, or observations. There are **no** durable audit tables yet: `agent_executions`, `agent_steps`, and `tool_executions`, plus the `GET /api/v1/agent/executions/{id}` retrieval endpoint, are **M9**.

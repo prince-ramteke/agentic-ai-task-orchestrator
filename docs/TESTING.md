@@ -110,3 +110,11 @@ Invalid input (400), unauthenticated (401), not found / **not owner → 404** (e
 - **Never** mark work done with failing/partial tests.
 - **Never** write a test that only asserts no-exception.
 - Run `./mvnw verify` green before pushing (`DEFINITION_OF_DONE.md`).
+
+## Milestone 6 — Agent test strategy (IMPLEMENTED)
+
+Three levels, all deterministic and offline (`./mvnw verify` needs **no** live Ollama):
+- **Unit:** `AgentDecisionValidatorTest`, `LoopDetectorTest`, `DeadlineCancellationTokenTest`, `AgentExecutionTest`, `ObservationSerializerTest`, `AgentToolCatalogTest`, `AgentPropertiesTest`, `AgentPlannerTest`, `AgentExceptionTest`.
+- **Orchestrator:** `AgentOrchestratorTest` drives the real `AgentOrchestrator` over a `ScriptedLlmClient` (a sequence-aware `LlmClient` test double) — direct FINAL, single/multi tool call, invalid-decision repair (success + failure), tool-not-found/unauthorized/failure observations, iteration/tool-call limits, loop detection, timeout (advancing `Clock`), cancellation (external token), and side-effect-retry safety.
+- **Integration:** `AgentExecuteIT` (`@SpringBootTest` + Testcontainers Postgres, `ScriptedLlmClient` as `@Primary`) exercises the authenticated endpoint → real orchestrator → real `ToolExecutor` → real `TaskService` → real DB, with the security cases (own-data, cross-user 404, admin any-by-id, identity-spoof ignored, unregistered tool not executed, 401).
+- **Boundary:** `AgentArchitectureBoundaryTest` scans `agent.*` for forbidden imports (repository/`EntityManager`/`JdbcTemplate`/domain services/Spring AI).

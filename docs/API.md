@@ -164,23 +164,40 @@ tool exception ever reaches HTTP): `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` 
 `TOOL_UNAUTHORIZED` (401), `TOOL_FORBIDDEN` (403), `TOOL_TIMEOUT` (504, reserved for M8),
 `TOOL_EXECUTION_FAILED` (500). A domain error (e.g. `NOT_FOUND`) is preserved with its own code.
 
+### Agent endpoint (M6) — VERIFIED
+
+| Method | Path | Auth | Success | Notes |
+|---|---|---|---|---|
+| POST | `/api/v1/agent/execute` | **authenticated** | 200 | Run one bounded agent execution over the registered tools |
+
+Request: `{ "message": "Show me my high-priority tasks" }` — `message` is `@NotBlank`, ≤ **4000** chars.
+
+Response (200): `{ "executionId", "status", "response", "iterations", "toolCalls", "durationMs", "failureCode" }`
+where `status ∈ COMPLETED | FAILED | TIMED_OUT | CANCELLED | LIMIT_REACHED | LOOP_DETECTED` and
+`failureCode` is present (non-null) only for non-`COMPLETED` runs.
+
+**Two-tier error model.** A run that actually starts and then terminates in a controlled state
+(`FAILED`/`LIMIT_REACHED`/`LOOP_DETECTED`/`TIMED_OUT`/`CANCELLED`) returns **HTTP 200** with a stable
+`failureCode` (`AGENT_INVALID_DECISION`, `AGENT_ITERATION_LIMIT`, `AGENT_TOOL_CALL_LIMIT`,
+`AGENT_TIMEOUT`, `AGENT_CANCELLED`, `AGENT_LOOP_DETECTED`, `AGENT_LLM_ERROR`, `AGENT_EXECUTION_FAILED`)
+— the body carries run metadata (`iterations`, `toolCalls`, `durationMs`) an error envelope cannot.
+Only **pre-execution** faults use the standard `ApiError` envelope: request-body validation → `400
+VALIDATION_ERROR`; missing/invalid auth → `401`. Identity comes only from the authenticated principal;
+the request body carries no `userId`/`role`/`ownerId`. Never returns raw, unvalidated model text — the
+`response` is the agent's `FINAL` answer, grounded in actual tool results. See ADR-0013…0016.
+
 ## 7. Planned endpoints (design only — not implemented)
 
-> Auth (M2), Task and Customer (M3) endpoints are **implemented** — see §6a. Only the agent
-> endpoints below remain design-only.
+> Auth (M2), Task/Customer (M3), AI (M4), Tools (M5) and the Agent execute endpoint (M6) are
+> **implemented**. Only the execution-retrieval endpoint below remains design-only (needs durable
+> audit — M9).
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/v1/agent/chat` | USER | Submit an objective; run the agent |
-| GET | `/api/v1/agent/executions/{id}` | USER (owner) / ADMIN | Retrieve an execution record + audited steps |
+| GET | `/api/v1/agent/executions/{id}` | USER (owner) / ADMIN | Retrieve a durable execution record + audited steps (**M9**) |
 
-### `POST /api/agent/chat` (shape sketch — subject to change, will be versioned)
-
-Request: `{ "objective": "string", "conversationId": "optional", "confirmToken": "optional (for resuming a confirmed dangerous op)" }`
-
-Response (conceptual): `{ "executionId", "status": "COMPLETED|NEEDS_CONFIRMATION|FAILED|INCOMPLETE", "summary", "steps": [ { "tool", "arguments(redacted)", "result", "outcome" } ], "confirmationRequest": { ... } }`
-
-Never returns raw, unvalidated model text. `NEEDS_CONFIRMATION` carries the exact action to confirm.
+A future `NEEDS_CONFIRMATION` status and a confirm-token resume flow arrive with the M8 confirmation
+workflow; M6 does not execute a human-confirmation step.
 
 ## 8. New-endpoint checklist
 

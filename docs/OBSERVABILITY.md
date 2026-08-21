@@ -77,3 +77,7 @@ Observability is for operating the system (may be sampled/rotated); **audit** is
 ## 7. Testing
 
 Assert that ids are present and propagated, that key metrics increment on the expected paths, and that no sensitive data appears in logs/metric labels (`TESTING.md`).
+
+## Milestone 6 — Agent metrics (IMPLEMENTED)
+
+Orchestration-level Micrometer metrics only (M5 already records `tool.execution.*`; the agent does **not** re-count them): `agent.execution.duration` (timer, tag `status`), `agent.execution.count` (counter, tag `status`), `agent.iterations` (summary), `agent.tool.calls` (counter), `agent.loop.detected` (counter), `agent.limit.reached` (counter, tag `limit` = `iteration`/`tool_call`). Structured logs carry `executionId`/`requestId` and log the decision **action** and chosen tool **name** only — never full prompts, arguments, or observations.

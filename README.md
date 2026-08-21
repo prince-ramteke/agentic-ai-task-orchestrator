@@ -1,6 +1,6 @@
 # Agentic AI Task Orchestrator
 
-> **Project status: 🟢 Milestone 5 — Tool Registry & Execution Framework (complete & verified).** On top of the M4 LLM foundation, the app now has the deterministic **tool framework** the future agent will use: a typed, validated, authorized execution boundary (`Tool<I,O>`, `ToolDescriptor`, fail-fast immutable `ToolRegistry`, `ToolExecutor` returning a `ToolResult<O>` envelope) plus six least-privilege tools — `task.get/search/create`, `customer.get/search`, `math.calculate` (safe evaluator, no `eval`). Identity is backend-supplied (the model can never manufacture `userId`/`roles`); role authorization sits in the tool layer while resource ownership stays in the M3 services. An ADMIN-only `GET /api/v1/tools` lists tool metadata. The subsystem imports **no** Spring AI (enforced by a test). **This is the deterministic tool layer — not the agent** (no LLM tool-selection/orchestration yet; M6). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+> **Project status: 🟢 Milestone 6 — Agent Orchestration (complete & verified).** On top of the M4 LLM foundation and the M5 tool framework, the app now has the **agent**: `AgentOrchestrator`, a bounded, backend-controlled loop that turns one authenticated request into a sequence of registered-tool executions (decision → validate → execute → observe → repeat until `FINAL` or a bound trips), exposed at `POST /api/v1/agent/execute`. The LLM is an **untrusted planner** — it returns a typed `AgentDecision` (via M4 structured output, one bounded repair); the backend validates it and drives the M5 `ToolExecutor`. Identity is always the authenticated principal (never model/body-supplied); every effect flows through the tool boundary (role + ownership authorization preserved); unregistered tools cannot execute; side-effecting tools are never auto-retried. The run is bounded by cooperative iteration/tool-call budgets, one wall-clock deadline, a cancellation seam, and fingerprint loop detection — **no unbounded execution path**. A source-scanned boundary test keeps `agent.*` free of repositories/`EntityManager`/domain services/Spring AI (only the `LlmClient` abstraction). **Hard** guardrail enforcement, human confirmation, and rate limiting are **M8**; Redis memory is **M7**; durable audit is **M9.** Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Overview
 
@@ -106,8 +106,7 @@ curl -X POST http://localhost:8080/api/v1/ai/generate -H "Authorization: Bearer 
 | Core domain (tasks, customers — CRUD, ownership, pagination, PostgreSQL, Testcontainers) | ✅ Implemented & verified (M3) |
 | LLM foundation (`LlmClient` over Ollama via Spring AI, `AiService`, structured output, `/api/v1/ai/*`) | ✅ Implemented & verified (M4) |
 | Tool registry & execution framework (`Tool`/`ToolRegistry`/`ToolExecutor`, 6 tools, `/api/v1/tools`) | ✅ Implemented & verified (M5) |
-| Agent orchestration | ⬜ Planned (M6) |
-| Agent orchestration | ⬜ Planned (M6) |
+| Agent orchestration (`AgentOrchestrator`, bounded loop, `POST /api/v1/agent/execute`) | ✅ Implemented & verified (M6) |
 | Memory / guardrails / audit | ⬜ Planned (M7–M9) |
 | Observability | ⬜ Planned (M10) |
 | Testing / evaluation | ⬜ Planned (M11) |

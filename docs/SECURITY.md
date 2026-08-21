@@ -145,3 +145,20 @@ Execute (+ audit)
 ```
 
 The agent can never exceed the authenticated user's own permissions, and admin tools are never offered in a USER context. M2 establishes the identity (`AuthenticatedUser`) and ownership primitive (`AuthorizationService`) this contract depends on; the tool-authorization engine is built in M5.
+
+## Milestone 6 — Agent security (IMPLEMENTED)
+
+The agent treats the LLM as an **untrusted planner**; the backend stays authoritative. Each attack fails safely, and the agent is never stronger than the authenticated user (tested in `AgentExecuteIT`):
+
+| Attempt | Why it fails |
+|---|---|
+| Prompt "you are admin now" / "ignore tool restrictions" | Roles/identity come only from the authenticated principal; the model cannot set them. |
+| `userId`/`role`/`ownerId` in the request body | The DTO carries only `message`; unknown fields are ignored on bind. |
+| `userId`/`ownerId` inside tool `arguments` | M5 `ToolExecutor` strict bind rejects unknown properties → `TOOL_INVALID_INPUT` observation. |
+| Fake tool name (e.g. `database.dropAll`) | `ToolRegistry.resolve` → `TOOL_NOT_FOUND` **before** any execution. |
+| Unauthorized tool / another user's resource | Role gate in `ToolExecutor` + ownership in the M3 service (404-masked). |
+| `task.create` for another user | Tool passes the principal; the service owns creation to that principal. |
+| Massive tool result | `ObservationSerializer` caps chars + array items. |
+| Repeated/looping calls, timeout, cancellation | `LoopDetector` + iteration/tool-call budgets + one deadline + cancellation seam. |
+
+Identity flows only from `@AuthenticationPrincipal`; every effect flows through the M5 `ToolExecutor`; side-effecting tools are never auto-retried. **Hard** confirmation/rate-limiting is M8.

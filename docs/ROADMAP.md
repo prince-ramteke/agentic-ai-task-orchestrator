@@ -78,13 +78,13 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `TOOL_SYSTEM.md`, `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `GUARDRAILS.md`, `EVALUATION.md`, `OBSERVABILITY.md`, `API.md`, `TESTING.md`, `PERFORMANCE.md`, `TECH_STACK.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
 - **Deferred:** agent orchestration (M6), Redis/memory (M7), guardrails/confirmation/hard-timeout (M8), durable tool/agent audit tables (M9), update/delete tools, Spring AI tool-calling adapter (M6).
 
-### Milestone 6 — Agent Orchestration ⬜
+### Milestone 6 — Agent Orchestration ✅ IMPLEMENTED
 - **Objective:** The orchestration loop: decision → tool selection → authorization → validation → execution → observation → next decision → completion.
 - **Prerequisites:** M5.
-- **Outputs:** orchestrator; `POST /api/agent/chat`; execution state model; multi-step flows (U2/U3-class); side-effecting `createTask`/`updateTask` with authorization.
-- **Validation:** agent tests over deterministic fakes for multi-step selection + argument accuracy; execution record persisted.
-- **Docs:** `AGENT_ARCHITECTURE.md`, `API.md` (agent endpoints), `CHANGELOG.md`.
-- **DoD:** LLM never bypasses authorization; execution is retrievable.
+- **Outputs:** `AgentOrchestrator` (bounded loop); `POST /api/v1/agent/execute`; in-memory single-request execution state; multi-step flows over the M5 registry (`task.get`/`task.search`/`task.create` etc.); cooperative bounds (iteration/tool-call budgets, one deadline, cancellation seam, loop detection); orchestration metrics. **Hard** guardrail enforcement, confirmation, and rate limiting remain **M8**; durable execution records + a retrieval endpoint remain **M9**.
+- **Validation:** unit tests (decision validation, budgets, deadline/cancellation, loop detection, observation bounds, catalog, planner); orchestrator tests over deterministic fakes (multi-step selection, argument accuracy, refusal/limit/timeout/loop paths); full Testcontainers-Postgres integration incl. own-data/cross-user-404/admin-any-by-id/identity-spoof/unregistered-tool security cases. `verify` needs no live Ollama.
+- **Docs:** `AGENT_ARCHITECTURE.md`, `GUARDRAILS.md`, `API.md` (agent endpoint), `TOOL_SYSTEM.md`, `SECURITY.md`, `OBSERVABILITY.md`, `CHANGELOG.md`; ADR-0013…0016.
+- **DoD:** LLM never bypasses authorization; every effect flows through the M5 `ToolExecutor`; no unbounded execution path. *(Durable, retrievable execution records: M9.)*
 
 ### Milestone 7 — Memory ⬜
 - **Objective:** Redis-backed conversation/session/execution state and caching, cleanly separated from durable Postgres data.
