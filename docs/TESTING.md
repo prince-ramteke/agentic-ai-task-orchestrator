@@ -7,6 +7,23 @@
 
 > **Milestone 2 status (VERIFIED 2026-08-21):** **39 tests total, all green** under `./mvnw verify`. Security suite: `AuthIntegrationTest` (20, `@SpringBootTest` + MockMvc through the real filter chain — register/login/JWT/RBAC/error-envelopes/password-hash/DB-constraint), `AuthHttpSocketTest` (3, `RANDOM_PORT` + `TestRestTemplate` — **real socket-level HTTP** over embedded Tomcat), `JwtServiceTest` (4 — roundtrip, expired, malformed, forged signature), `AuthorizationServiceTest` (4 — owner/admin/other/null ownership). Tests run against **H2 in PostgreSQL-compat mode executing the production Flyway migrations** — reproducible without Docker (ADR-0005). Testcontainers-PostgreSQL integration is deferred to M3.
 
+> **Milestone 3 status (VERIFIED 2026-08-21):** **99 fast tests** (surefire, H2 in PostgreSQL-mode)
+> plus **Testcontainers PostgreSQL integration tests** (`*IT`, failsafe). Fast suite adds unit tests
+> (`SortWhitelistTest`, `Task`/`Customer` mapper + service with Mockito) and `@SpringBootTest`+MockMvc
+> API tests (`TaskApiTest` 17, `CustomerApiTest` 10 — CRUD, validation 400, 401, ownership 404-masking,
+> admin-any-by-id, admin own-list, mass-assignment rejection, pagination/filter/sort, customer 409).
+> Integration tests (`SchemaIT`, `TaskPersistenceIT`, `CustomerPersistenceIT`) run the real Flyway
+> migrations on `postgres:16-alpine` and assert CHECK/UNIQUE constraints and FK cascade — they run
+> for real when Docker is present (a single shared `postgres:16-alpine` — the Testcontainers
+> singleton-container pattern, so the cached Spring test context stays valid across IT classes) and
+> **skip cleanly** via a Docker-availability assumption otherwise, so `./mvnw verify` stays green
+> without Docker. They caught a PostgreSQL-only bug that H2
+> had tolerated (nullable `String` param → `lower(bytea)`), fixed with `CAST(:search AS string)`.
+> The **JaCoCo enforcement gate is now active** (see §8). The failsafe plugin pins Docker
+> `api.version=1.44` (docker-java in Testcontainers 1.20.x otherwise fails against Docker Engine 29
+> with HTTP 400). ITs are required in Docker-capable CI; PostgreSQL integration is only claimed
+> *verified* when the ITs actually ran.
+
 ## 1. Test pyramid
 
 ```
@@ -50,14 +67,14 @@ Runs in parallel to the pyramid; scores agent behavior against the dataset (`EVA
 
 ## 7. Error/edge coverage (required)
 
-Invalid input (400), unauthenticated (401), not owner (403), not found (404), malformed model output (422), guardrail budget (429). Security tests for injection and authorization refusal.
+Invalid input (400), unauthenticated (401), not found / **not owner → 404** (existence-masking on owned domain resources; 403 is reserved for RBAC/role denial such as a USER hitting an ADMIN-only route), malformed model output (422), guardrail budget (429). Security tests for injection and authorization refusal.
 
 ## 8. Coverage gate (targets)
 
 - Service/domain logic: **≥ 80%**.
 - Overall: **≥ 75%**.
 - Tools and guardrails: every branch of validation/authorization/bounds covered.
-- **Status:** JaCoCo **reporting** is enabled now (M1); the **enforcement gate** (a failing `jacoco:check` in `./mvnw verify`) is activated in **M3**, once real domain logic exists so the thresholds are meaningful rather than trivially failing on a skeleton (ADR-0001). Do not drop below the gate once enforced.
+- **Status:** the **enforcement gate is ACTIVE as of M3** — `jacoco:check` runs in `./mvnw verify` and fails the build below **75% BUNDLE instruction coverage** (excludes: bootstrap class, `config`, DTO records, response envelopes). Coverage is measured from the surefire (`*Test`) suite, so the gate holds even when Docker-gated `*IT` tests are skipped. Current overall ≈ 88%; `TaskService`/`CustomerService` ≥ 80% (report-verifiable). Do not drop below the gate, and do not add assertion-free tests to inflate it.
 
 ## 9. Rules
 

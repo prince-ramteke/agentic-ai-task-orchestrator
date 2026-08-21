@@ -35,11 +35,13 @@ Every technology here has an architectural reason. Nothing is added to look impr
 | Spring Boot | 3.4.1 | ADR-0001 |
 | springdoc-openapi | 2.7.0 | Officially aligned with Spring Boot 3.4.x |
 | Maven Wrapper | 3.9.9 (script-only) | Reproducible build, no global Maven needed |
-| JaCoCo | 0.8.12 | Coverage **reporting** only in M1; enforcement gate deferred to M3 |
+| JaCoCo | 0.8.12 | Coverage reporting since M1; **enforcement gate active as of M3** (`verify` fails below 75% BUNDLE instruction coverage; excludes bootstrap/config/DTOs/response envelopes) |
 
 Milestone 1 dependencies: `spring-boot-starter-web`, `-actuator`, `-validation`, `springdoc-openapi-starter-webmvc-ui`, `-test`.
 
-**Added in Milestone 2 (auth):** `spring-boot-starter-security`, `spring-boot-starter-data-jpa`, `flyway-core` + `flyway-database-postgresql` (10.20.1), `org.postgresql:postgresql` (42.7.4, runtime), `io.jsonwebtoken:jjwt-api/impl/jackson` (0.12.6). Test-only: `spring-security-test`, `com.h2database:h2` (2.3.232). Redis and Spring AI are still **not** present (added by the milestones that need them). See ADR-0003/0004/0005.
+**Added in Milestone 2 (auth):** `spring-boot-starter-security`, `spring-boot-starter-data-jpa`, `flyway-core` + `flyway-database-postgresql` (10.20.1), `org.postgresql:postgresql` (42.7.4, runtime), `io.jsonwebtoken:jjwt-api/impl/jackson` (0.12.6). Test-only: `spring-security-test`, `com.h2database:h2` (2.3.232). See ADR-0003/0004/0005.
+
+**Added in Milestone 3 (core domain):** test-only `org.testcontainers:junit-jupiter` + `org.testcontainers:postgresql` (versions managed by the Spring Boot 3.4.1 BOM — Testcontainers 1.20.x) and the `maven-failsafe-plugin` (runs `*IT` integration tests in `verify`). No new runtime dependencies. Testcontainers ITs skip cleanly without Docker (`disabledWithoutDocker`) and run for real in Docker-capable CI (ADR-0008). The failsafe plugin pins the Docker Remote API version to `1.44` (docker-java bundled in Testcontainers 1.20.x otherwise negotiates a version Docker Engine 29 rejects with HTTP 400). Redis and Spring AI are still **not** present (added by the milestones that need them).
 
 ## Frontend (Milestone 13)
 

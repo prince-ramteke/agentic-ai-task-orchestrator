@@ -23,6 +23,12 @@ An **agent** is the backend orchestration loop that turns a user objective into 
 
 **Principle:** the model proposes; the backend disposes.
 
+> **Domain boundary (M3, must not regress):** "Execute deterministic business logic" means calling
+> the M3 domain services — `TaskService` / `CustomerService` — which already enforce ownership via
+> `AuthorizationService` and validate input. When tools arrive (M5), they call these services with
+> the authenticated `AuthenticatedUser`; they never reach `EntityManager`/`JdbcTemplate`/repositories
+> directly. This keeps the agent strictly weaker than or equal to the user's own permissions.
+
 ## 3. Execution lifecycle
 
 ```

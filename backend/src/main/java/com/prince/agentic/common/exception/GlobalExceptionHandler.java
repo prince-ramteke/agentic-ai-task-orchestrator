@@ -14,6 +14,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
@@ -57,6 +58,16 @@ public class GlobalExceptionHandler {
                 .toList();
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR",
                 "Request validation failed.", request, fieldErrors);
+    }
+
+    /** A query/path param that can't be converted to its target type (e.g. bad enum value) → 400. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                                       HttpServletRequest request) {
+        String field = ex.getName();
+        String message = "Invalid value for parameter '" + field + "'.";
+        return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", message, request,
+                List.of(new FieldValidationError(field, "invalid value")));
     }
 
     /** Unreadable/malformed request body (e.g. broken JSON) → 400, without echoing the payload. */

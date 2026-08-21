@@ -43,16 +43,28 @@ Related ADRs, docs, issues.
 - Reference the ADR from the doc it affects (e.g. `TECH_STACK.md`), and vice versa.
 - Keep it short: context + decision + consequences, not an essay.
 
-## Planned ADRs (to be written as decisions are made — none accepted yet)
+## Accepted ADRs
 
-| ID | Topic | Expected milestone |
-|---|---|---|
-| ADR-0001 | Technology stack | M1 |
-| ADR-0002 | Agent orchestration model | M6 |
-| ADR-0003 | PostgreSQL as primary store (+ id strategy) | M3 |
-| ADR-0004 | Redis for conversation/execution memory | M7 |
-| ADR-0005 | Tool authorization model | M5 |
-| ADR-0006 | Confirmation policy for dangerous operations | M8 |
-| ADR-0007 | LLM provider strategy (Ollama default, fallback) | M4 |
+| ID | Topic | Milestone | Status |
+|---|---|---|---|
+| ADR-0001 | Technology baseline | M1 | Accepted |
+| ADR-0002 | Defer persistence to M3 | M1 | Accepted (superseded for security data by ADR-0003/0005) |
+| ADR-0003 | User & role security model (+ id strategy for security tables) | M2 | Accepted |
+| ADR-0004 | JWT authentication strategy | M2 | Accepted |
+| ADR-0005 | Database migration & test-DB strategy | M2 | Accepted |
+| ADR-0006 | Core domain ownership model | M3 | Accepted |
+| ADR-0007 | Domain persistence & primary-key strategy | M3 | Accepted |
+| ADR-0008 | Testcontainers PostgreSQL integration testing | M3 | Accepted |
 
-These are *planned topics*, not decisions. An ADR file is created only when the decision is actually made.
+## Planned ADR topics (numbers assigned only when the decision is actually made)
+
+| Topic | Expected milestone |
+|---|---|
+| LLM provider strategy (Ollama default, fallback) | M4 |
+| Tool authorization model | M5 |
+| Agent orchestration model | M6 |
+| Redis for conversation/execution memory | M7 |
+| Confirmation policy for dangerous operations | M8 |
+
+These are *planned topics*, not decisions. A new ADR file gets the next free number (ADR-0009, …)
+when the decision is made; existing numbers are never renumbered or reused.

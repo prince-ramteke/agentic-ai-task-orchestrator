@@ -3,6 +3,13 @@
 
 > Full deployment is planned (M12). The compose stack does not exist yet. The stack must start with one command from a clean clone.
 
+> **Milestone 3 status:** no new runtime env vars. The Task/Customer APIs run on the same PostgreSQL
+> + security configuration as M2 (Flyway now also applies `V3`/`V4`). One tooling note: the
+> Testcontainers integration tests (`*IT`) require a **running Docker engine**; without Docker,
+> `./mvnw verify` still passes (those tests skip via `disabledWithoutDocker`). CI must provide Docker
+> to actually verify the PostgreSQL integration suite. On Docker Engine 29 the build pins the Docker
+> API version to `1.44` (see `docs/TESTING.md` / ADR-0008).
+
 > **Milestone 2 status (VERIFIED 2026-08-21):** the backend now requires **PostgreSQL** and
 > security env vars to run. Required env: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`,
 > `JWT_SECRET` (≥ 32 chars), optionally `JWT_EXPIRATION_SECONDS` (default 3600) and

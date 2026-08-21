@@ -3,6 +3,11 @@
 
 > Conceptual policy. Guides how user data, prompts, outputs, logs, and external providers are handled. Applied as features are built.
 
+> **Milestone 3 status:** the first user content is stored — `tasks` (title/description/…) and
+> `customers` (name/email/phone/status). It is kept minimal and **owner-scoped** (a user only ever
+> reads their own rows; a non-owner gets 404). Domain logs contain **ids only** (`task.created id=… owner=…`)
+> — never titles, names, or emails. `customers.email`/`phone` are PII stored in Postgres and never logged.
+
 > **Milestone 2 status:** credentials handling is now implemented and enforced. Passwords are stored only as **BCrypt hashes** (never plaintext), never returned by any API, never logged. JWTs and `JWT_SECRET` are never logged; tokens carry no password/hash/secret. **Email is PII** stored in Postgres; it appears in logs only as an identifier for failed-login (brute-force) analysis, not alongside credentials. The only committed secret is a clearly-labeled **test-only** JWT value in `application-test.yml`; real secrets come from the environment.
 
 ## 1. Data categories

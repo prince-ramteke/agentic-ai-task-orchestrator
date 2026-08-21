@@ -3,6 +3,12 @@
 
 > Conceptual. No performance work or measurements exist yet. **Never cite a number that wasn't actually measured on this system.**
 
+> **Milestone 3 note (design, not benchmarked):** the Task/Customer list endpoints are bounded and
+> indexed by design — every collection query is `owner_id`-scoped in SQL (never load-all-then-filter),
+> page size is clamped to ≤100, sort fields are whitelisted, and the ownership/filter columns are
+> indexed (`(owner_id)`, `(owner_id, created_at)`, task `(owner_id, status|priority|due_date)`). No
+> transaction spans an external call. No latency numbers are claimed — none have been measured yet.
+
 ## 1. Philosophy
 
 Measure first, optimize the proven bottleneck, then re-measure. Correctness, security, and clarity come before speed. Most latency in an agentic system is the model and tool calls — optimize those paths, not micro-code.

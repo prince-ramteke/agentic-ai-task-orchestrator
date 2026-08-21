@@ -1,0 +1,30 @@
+# Integration-test profile: real PostgreSQL provided by Testcontainers.
+# The datasource url/username/password are injected at runtime via @DynamicPropertySource
+# (see AbstractPostgresIntegrationTest); Flyway runs the SAME production migrations on real PG.
+spring:
+  main:
+    banner-mode: off
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+# Test-only, non-production JWT secret (>= 256 bits). NOT a real secret — safe to commit.
+security:
+  jwt:
+    secret: test-only-jwt-signing-secret-not-for-production-use-0123456789ABCDEF
+    expiration-seconds: 3600
+    issuer: agentic-ai-task-orchestrator
+  cors:
+    allowed-origins: http://localhost:5173
+
+logging:
+  level:
+    root: WARN
+    com.prince.agentic: INFO

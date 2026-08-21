@@ -38,6 +38,13 @@ proposed tool + args (from LLM)
 
 If any gate fails, the tool does not execute; the failure becomes an audited observation.
 
+> **Future contract with the M3 domain (must hold):** the deterministic "execute" step calls the
+> existing domain services — `TaskService` / `CustomerService` — passing the authenticated
+> `AuthenticatedUser`. A tool MUST NOT touch `EntityManager`, `JdbcTemplate`, or a repository
+> directly, because those bypass the ownership/authorization and business rules the services
+> enforce. The domain service is the business boundary; the tool is a thin, audited adapter over it.
+> Target shape: `AI tool → TaskService/CustomerService → AuthorizationService → Repository → PostgreSQL`.
+
 ## 4. Risk classification (security strictness increases with risk)
 
 | Class | Meaning | Examples (planned) | Required treatment |

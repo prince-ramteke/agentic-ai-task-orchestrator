@@ -10,7 +10,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 0 | Starter Kit | ✅ |
 | 1 | Backend Foundation | ✅ |
 | 2 | Authentication & Authorization | ✅ |
-| 3 | Core Domain | ⬜ |
+| 3 | Core Domain | ✅ |
 | 4 | Spring AI Integration | ⬜ |
 | 5 | Tool Registry | ⬜ |
 | 6 | Agent Orchestration | ⬜ |
@@ -51,13 +51,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `SECURITY.md`, `THREAT_MODEL.md`, `DATA_PRIVACY.md`, `API.md`, `DATABASE.md`, `TESTING.md`, `TECH_STACK.md`, `DEPLOYMENT.md`, `OBSERVABILITY.md`, `CHANGELOG.md`, `README.md`.
 - **Deferred:** ownership on concrete resources (M3), Testcontainers-PostgreSQL (M3), login rate limiting & token rotation/revocation (later).
 
-### Milestone 3 — Core Domain ⬜
+### Milestone 3 — Core Domain ✅
 - **Objective:** Task and Customer domains with CRUD, owned by users.
 - **Prerequisites:** M2.
-- **Outputs:** `task` and `customer` features (entities, repositories, services, DTOs, controllers); Flyway migrations; ownership enforced; pagination.
-- **Validation:** CRUD integration tests (Testcontainers Postgres); ownership tests; migrations apply clean.
-- **Docs:** `DATABASE.md`, `API.md`, `CHANGELOG.md`.
-- **DoD:** coverage gate holds; docs match code.
+- **Delivered (IMPLEMENTED + VERIFIED):** `task` and `customer` features (entities, enums, repositories, services, controllers, mappers, DTOs, not-found/conflict exceptions); Flyway `V3__create_tasks.sql` / `V4__create_customers.sql` (owner FK + cascade, CHECK constraints, `UNIQUE(owner_id,email)`, ownership/query indexes); server-assigned ownership with 404-masking and admin-any-by-id; pagination (size ≤100), whitelisted sorting, filters; `PageResponse<T>`, `SortWhitelist`, type-mismatch→400 handling; Testcontainers PostgreSQL ITs (`SchemaIT`, `TaskPersistenceIT`, `CustomerPersistenceIT`) + `maven-failsafe`; JaCoCo enforcement gate activated. 99 fast tests (H2) + real-PostgreSQL ITs.
+- **Validation (VERIFIED 2026-08-21):** `./mvnw clean test` PASS (99); `./mvnw clean verify` PASS with the coverage gate held (~88%); Testcontainers ITs executed for real against `postgres:16-alpine` (migrations, CHECK/UNIQUE/FK-cascade, and a PostgreSQL-only search bug all verified); ownership/IDOR/admin/mass-assignment matrix green.
+- **Decisions:** ADR-0006 (core domain ownership model), ADR-0007 (domain persistence & PK strategy), ADR-0008 (Testcontainers PostgreSQL integration testing).
+- **Docs updated:** `DATABASE.md`, `API.md`, `SECURITY.md`, `TESTING.md`, `TECH_STACK.md`, `DEPLOYMENT.md`, `DATA_PRIVACY.md`, `PERFORMANCE.md`, `OBSERVABILITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
+- **Deferred:** cross-user admin listing (dedicated admin API, later); soft delete; Spring AI/agent (M4+).
 
 ### Milestone 4 — Spring AI Integration ⬜
 - **Objective:** LLM provider abstraction (`LlmClient`) over Ollama, with output parsed/validated into typed objects.

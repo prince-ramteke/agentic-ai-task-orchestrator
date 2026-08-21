@@ -1,8 +1,9 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 2** it provides the backend foundation plus the
-authentication & authorization boundary (JWT, BCrypt, RBAC, user/role persistence). No domain,
-Spring AI, or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+Spring Boot backend module. Through **Milestone 3** it provides the backend foundation, the
+authentication & authorization boundary (JWT, BCrypt, RBAC, user/role persistence), and the first
+user-owned business domains — **Task** and **Customer** (CRUD, ownership, pagination/filtering,
+PostgreSQL). No Spring AI or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -12,8 +13,12 @@ Spring AI, or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMA
 ## Build & test (no infrastructure)
 
 ```bash
-./mvnw verify        # 39 tests against H2 running the production Flyway migrations
+./mvnw verify        # 99 fast tests on H2 running the production Flyway migrations, + coverage gate
 ```
+
+Testcontainers PostgreSQL integration tests (`*IT`) run in `verify` **when a Docker engine is
+available** (they verify the real migrations/constraints on `postgres:16-alpine`); without Docker
+they skip cleanly and the build stays green.
 
 ## Run (needs PostgreSQL + env)
 
@@ -32,6 +37,8 @@ Default port: `8080`. Default profile: `local`. Flyway applies the schema at sta
 | `POST /api/v1/auth/login` | public | Authenticate → JWT |
 | `GET /api/v1/me` | Bearer | Current authenticated principal |
 | `GET /api/v1/admin/ping` | ADMIN | RBAC demonstration |
+| `GET/POST /api/v1/tasks` · `GET/PUT/DELETE /api/v1/tasks/{id}` | Bearer | User-owned tasks (CRUD, pagination, filters) |
+| `GET/POST /api/v1/customers` · `GET/PUT/DELETE /api/v1/customers/{id}` | Bearer | User-owned customers (CRUD, search) |
 | `GET /api/v1/health` · `/actuator/health` · `/actuator/info` | public | Liveness / metadata |
 | `GET /swagger-ui.html` | public | Swagger UI (click **Authorize** to send a JWT) |
 
@@ -59,9 +66,12 @@ com.prince.agentic
 ├── user/                         # User/Role entities + repositories
 ├── account/                      # MeController (/api/v1/me)
 ├── admin/                        # AdminController (/api/v1/admin/ping)
+├── task/                         # Task entity/enums, repository, service, controller, mapper, DTOs
+├── customer/                     # Customer entity/enum, repository, service, controller, mapper, DTOs
+├── common/query/                 # SortWhitelist (page/size clamp + sort whitelist)
 └── health/                       # HealthController, HealthResponse
 
-resources/db/migration/           # V1 (users/roles/user_roles), V2 (seed roles)
+resources/db/migration/           # V1 (users/roles), V2 (seed roles), V3 (tasks), V4 (customers)
 ```
 
 Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profiles). The reported version is filtered in from the build at package time.
@@ -75,7 +85,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Domain entities/CRUD & Testcontainers-PostgreSQL (M3), Spring AI/Ollama (M4), tool registry (M5), the agent runtime (M6+), Redis (M7). Dependencies are added by the milestone that needs them.
+Spring AI/Ollama (M4), tool registry (M5), the agent runtime (M6+), Redis (M7). Dependencies are added by the milestone that needs them. (Domain CRUD and Testcontainers-PostgreSQL landed in M3.)
 
 ## Docker
 

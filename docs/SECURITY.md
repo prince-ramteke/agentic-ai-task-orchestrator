@@ -26,10 +26,15 @@
   (demonstrated by `GET /api/v1/admin/ping`). USER → 403, ADMIN → 200, anonymous → 401.
 - **The authenticated principal** is `AuthenticatedUser(userId, email, roles)`, resolved from the
   verified token — the single identity future services and agent tools authorize against.
-- **Ownership** foundation: `AuthorizationService.requireOwnershipOrAdmin(user, ownerId)` — the
-  reusable, server-side check that a USER may only touch their own resources (ADMIN may act per
-  permission), verified against the authenticated principal, never a client/model claim. Domain
-  resources to apply it to arrive in M3+.
+- **Ownership** is enforced on concrete resources as of **M3** (`Task`, `Customer`) via
+  `AuthorizationService.canAccess(user, ownerId)` — the reusable, server-side check that a USER may
+  only touch their own resources (ADMIN may act per permission), verified against the authenticated
+  principal, never a client/model claim. Owner is assigned server-side from the token; create DTOs
+  have no `ownerId` field, so ownership cannot be mass-assigned (ADR-0006).
+- **404 vs 403 on domain resources:** a USER requesting another user's (or a non-existent) resource
+  by id receives **404** (existence-masking — the API never reveals which ids exist). **403** is
+  reserved for RBAC/role denial (e.g. a USER hitting an ADMIN-only route). List endpoints are
+  `owner_id`-scoped in SQL for USER and ADMIN alike; an ADMIN may act on any single resource by id.
 - **The client can never choose a role:** `RegisterRequest` has no role field; public
   registration always grants `ROLE_USER`; ADMIN is a controlled server-side assignment only.
 
@@ -98,7 +103,7 @@ Authenticated by default? Ownership/authorization enforced before effect? Input/
 **Known limitations (honest).**
 - Token authorities are as-of-issue; a role change applies on next login (bounded by the short TTL).
 - No token revocation/rotation/denylist yet — a stolen token is valid until expiry.
-- Ownership enforcement is a tested foundation (`AuthorizationService`); it is applied to concrete resources from M3.
+- Ownership enforcement is applied to concrete resources as of M3 (`Task`, `Customer`), verified by unit + API + real-PostgreSQL tests (IDOR, mass-assignment, admin-any-by-id, 404-masking).
 
 ## 11. The agent-future security contract (must not regress)
 

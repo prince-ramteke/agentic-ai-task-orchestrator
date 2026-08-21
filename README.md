@@ -1,6 +1,6 @@
 # Agentic AI Task Orchestrator
 
-> **Project status: 🟢 Milestone 2 — Authentication & Authorization (complete & verified).** JWT auth (register/login), BCrypt, RBAC (USER/ADMIN), a stateless security filter, and user/role persistence via Flyway are implemented and tested (39 tests green). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+> **Project status: 🟢 Milestone 3 — Core Domain (complete & verified).** On top of the M2 auth boundary, the first user-owned business domains — **Task** and **Customer** — are implemented with full CRUD, server-enforced ownership (404-masking, admin-any-by-id), pagination/filtering, PostgreSQL persistence via Flyway, and real-PostgreSQL Testcontainers tests (99 fast tests green + integration tests). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Overview
 
@@ -85,7 +85,7 @@ Then register, log in, and call a protected endpoint:
 curl -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"ExamplePassword123!"}'
 ```
 
-Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html), log in via `/api/v1/auth/login`, click **Authorize**, and call `GET /api/v1/me`.
+Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html), log in via `/api/v1/auth/login`, click **Authorize**, and call `GET /api/v1/me`. As of **M3** you can also exercise the domain APIs — `/api/v1/tasks` and `/api/v1/customers` (CRUD, pagination, filtering); each user sees only their own resources.
 
 > _Planned (Milestone 12)._ The full one-command stack (`docker-compose up --build`, bringing up PostgreSQL, Redis, Ollama, Prometheus, Grafana, and the frontend) is not implemented yet. Copy [`.env.example`](.env.example) to `.env` when those services arrive; M1 itself needs no environment variables. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
@@ -96,8 +96,7 @@ Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.ht
 | Engineering governance (docs, rules, commands, prompts) | ✅ Implemented (M0) |
 | Backend foundation (Spring Boot skeleton, health, error model, OpenAPI, CI) | ✅ Implemented & verified (M1) |
 | Authentication & authorization (JWT, BCrypt, RBAC, user/role persistence) | ✅ Implemented & verified (M2) |
-| Authentication / RBAC | ⬜ Planned (M2) |
-| Core domain (tasks, customers) | ⬜ Planned (M3) |
+| Core domain (tasks, customers — CRUD, ownership, pagination, PostgreSQL, Testcontainers) | ✅ Implemented & verified (M3) |
 | Spring AI + tool registry | ⬜ Planned (M4–M5) |
 | Agent orchestration | ⬜ Planned (M6) |
 | Memory / guardrails / audit | ⬜ Planned (M7–M9) |

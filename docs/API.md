@@ -5,9 +5,9 @@
 
 ## 1. Conventions
 
-- Base path **`/api`**. JSON in/out. UTF-8.
+- Base path **`/api/v1`**. JSON in/out. UTF-8.
 - Auth via `Authorization: Bearer <JWT>` on all non-public routes.
-- Public routes only: `/api/auth/**`, `/actuator/health`, Swagger.
+- Public routes only: `/api/v1/auth/**`, `/api/v1/health`, `/actuator/health`, `/actuator/info`, Swagger.
 - Resources are **nouns**, plural (`/tasks`, `/customers`). Sub-resources nest logically.
 - Correct HTTP methods: GET (read, safe) · POST (create/action) · PUT (full update) · PATCH (partial) · DELETE (remove).
 - Every endpoint documented in SpringDoc/Swagger and here.
@@ -93,23 +93,49 @@ List endpoints accept `page` (0-based), `size` (bounded max), `sort` (`field,asc
 - Missing/invalid/expired/forged token on a protected route → **401 `UNAUTHORIZED`**.
 - Authenticated but insufficient role → **403 `FORBIDDEN`**.
 
-Machine error codes in the envelope (`error` field): `VALIDATION_ERROR`, `MALFORMED_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `INTERNAL_ERROR`.
+Machine error codes in the envelope (`error` field): `VALIDATION_ERROR`, `MALFORMED_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `INTERNAL_ERROR`.
+
+### Task & Customer endpoints (M3) — VERIFIED
+
+All require `Authorization: Bearer <JWT>`. Owner is assigned server-side from the token — a client
+`ownerId` in the body is ignored. A USER sees only their own resources; a request for another user's
+resource (or a non-existent id) returns **404** (existence-masking, never 403). An ADMIN may
+GET/PUT/DELETE any single resource by id, but list endpoints always return only the caller's own.
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/api/v1/tasks` | 201 + `Location` | body = `TaskResponse` |
+| GET | `/api/v1/tasks` | 200 | `PageResponse<TaskSummaryResponse>`; params `page,size,sort,status,priority,dueBefore` |
+| GET | `/api/v1/tasks/{id}` | 200 | `TaskResponse` (404 if not owned/absent) |
+| PUT | `/api/v1/tasks/{id}` | 200 | **full replacement**; `status` & `priority` required |
+| DELETE | `/api/v1/tasks/{id}` | 204 | hard delete |
+| POST | `/api/v1/customers` | 201 + `Location` | 409 `CONFLICT` on duplicate `email` for the same owner |
+| GET | `/api/v1/customers` | 200 | `PageResponse<CustomerSummaryResponse>`; params `page,size,sort,status,search` |
+| GET | `/api/v1/customers/{id}` | 200 | `CustomerResponse` (404 if not owned/absent) |
+| PUT | `/api/v1/customers/{id}` | 200 | full replacement; `status` required; 409 on email conflict |
+| DELETE | `/api/v1/customers/{id}` | 204 | hard delete |
+
+**Pagination/sort/filter.** `page` (0-based, default 0), `size` (default 20, **max 100** — clamped),
+`sort=field,asc|desc` restricted to a whitelist (unknown field → 400): tasks
+`{createdAt,updatedAt,dueDate,priority,status,title}`, customers `{createdAt,updatedAt,name,status}`;
+default sort `createdAt,desc`. Response envelope: `{ content[], page, size, totalElements, totalPages, first, last }`.
+Task filters: `status`, `priority`, `dueBefore` (tasks with `due_date` ≤ the date). Customer filters:
+`status`, `search` (case-insensitive substring on name or email). An invalid enum value in a query
+param → 400 `VALIDATION_ERROR`.
+
+**Field validation.** Task: `title` required ≤200; `description` ≤2000; `estimatedHours` ≥0, ≤9999.99;
+`status`/`priority` valid enum values. Customer: `name` required ≤150; `email` valid & ≤255; `phone`
+≤30 (digits/spaces/`+-()`); `status` valid enum. Violations → 400 with `fieldErrors`.
 
 ## 7. Planned endpoints (design only — not implemented)
 
+> Auth (M2), Task and Customer (M3) endpoints are **implemented** — see §6a. Only the agent
+> endpoints below remain design-only.
+
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| POST | `/api/auth/register` | public | Register a user |
-| POST | `/api/auth/login` | public | Obtain a JWT |
-| GET | `/api/tasks` | USER | List own tasks (paginated, filterable) |
-| GET | `/api/tasks/{id}` | USER (owner) | Get a task |
-| POST | `/api/tasks` | USER | Create a task |
-| PUT | `/api/tasks/{id}` | USER (owner) | Update a task |
-| DELETE | `/api/tasks/{id}` | USER (owner) | Delete a task |
-| GET | `/api/customers` | USER | List own customers |
-| GET | `/api/customers/{id}` | USER (owner) | Get a customer |
-| POST | `/api/agent/chat` | USER | Submit an objective; run the agent |
-| GET | `/api/agent/executions/{id}` | USER (owner) / ADMIN | Retrieve an execution record + audited steps |
+| POST | `/api/v1/agent/chat` | USER | Submit an objective; run the agent |
+| GET | `/api/v1/agent/executions/{id}` | USER (owner) / ADMIN | Retrieve an execution record + audited steps |
 
 ### `POST /api/agent/chat` (shape sketch — subject to change, will be versioned)
 

@@ -9,7 +9,43 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Work in progress toward Milestone 3 — Core Domain (Task/Customer)._
+_Next: Milestone 4 — Spring AI + Ollama Integration (not started)._
+
+---
+
+## [0.0.3] — 2026-08-21 — Milestone 3: Core Domain (Task & Customer)
+
+### Added
+- **Task domain** (`task` package): `Task` entity, `TaskStatus` (TODO/IN_PROGRESS/COMPLETED/CANCELLED) and `TaskPriority` (LOW/MEDIUM/HIGH/CRITICAL) enums, `TaskRepository` (ownership-scoped nullable-filter query), `TaskService`, `TaskController`, `TaskMapper`, `TaskNotFoundException`, and DTOs (`TaskCreateRequest`, `TaskUpdateRequest`, `TaskResponse`, `TaskSummaryResponse`).
+- **Customer domain** (`customer` package): `Customer` entity, `CustomerStatus` (ACTIVE/INACTIVE) enum, `CustomerRepository` (unique-email pre-check + own-scoped search query), `CustomerService`, `CustomerController`, `CustomerMapper`, `CustomerNotFoundException`, `CustomerEmailAlreadyExistsException` (409), and DTOs.
+- **REST APIs** (all authenticated): `GET/POST /api/v1/tasks`, `GET/PUT/DELETE /api/v1/tasks/{id}`, and the same for `/api/v1/customers`. `POST`→201+`Location`, `PUT`→200 (full replacement), `DELETE`→204. Pagination (`page`, `size`≤100, whitelisted `sort`), filters (task: `status`/`priority`/`dueBefore`; customer: `status`/`search`), `PageResponse<T>` envelope.
+- **Flyway migrations**: `V3__create_tasks.sql`, `V4__create_customers.sql` — `owner_id` FK `ON DELETE CASCADE`, CHECK constraints for enums, `UNIQUE(owner_id, email)` for customers, and ownership/query indexes (`(owner_id)`, `(owner_id, created_at)`, task `(owner_id, status|priority|due_date)`).
+- **Ownership & authorization**: owner assigned server-side from the JWT principal (client `ownerId` ignored — mass-assignment prevented); by-id access load-then-authorize via `AuthorizationService.canAccess`; non-owner/missing → 404 (existence-masking); ADMIN own-list + admin-any-by-id.
+- **Common**: `PageResponse<T>`, `SortWhitelist` (page/size clamp + sort-field whitelist), `InvalidRequestException` (400); `GlobalExceptionHandler` now maps `MethodArgumentTypeMismatchException` (bad enum query param) → 400.
+- **Testcontainers PostgreSQL integration tests** (`*IT`, failsafe): `AbstractPostgresIntegrationTest` (`@DynamicPropertySource`, `disabledWithoutDocker`), `SchemaIT`, `TaskPersistenceIT`, `CustomerPersistenceIT` — verify the real migrations, CHECK/UNIQUE constraints, and FK cascade on `postgres:16-alpine`. `application-it.yml` profile added.
+- **99 fast tests** (surefire, H2) + Testcontainers ITs. New: `SortWhitelistTest`, `Task*`/`Customer*` repository/mapper/service/API tests.
+
+### Changed
+- **JaCoCo enforcement gate activated** (M1/M2 was reporting-only): `verify` fails below 75% BUNDLE instruction coverage, with narrow excludes (bootstrap, `config`, DTO records, response envelopes). Current overall coverage ~88%; `TaskService`/`CustomerService` ≥ 80%.
+- `pom.xml`: added Testcontainers (`junit-jupiter`, `postgresql`, test scope) and `maven-failsafe-plugin`; failsafe pins Docker `api.version=1.44` (docker-java in Testcontainers 1.20.x otherwise negotiates an API version Docker Engine 29 rejects with HTTP 400).
+
+### Fixed
+- Customer search query failed on real PostgreSQL (`function lower(bytea) does not exist`) when the `search` filter was null: a nullable `String` bind is untyped on PG. Fixed with `CAST(:search AS string)` in the JPQL. Caught by `CustomerPersistenceIT` (H2 had tolerated it) — the value the Testcontainers suite adds.
+
+### Decisions
+- ADR-0006 — Core domain ownership model. ADR-0007 — Domain persistence & primary-key strategy. ADR-0008 — Testcontainers PostgreSQL integration testing.
+
+### Docs
+- Reconciled: ownership FK column documented as `owner_id` (was `user_id` conceptually) in `DATABASE.md`; base path standardized to `/api/v1` in `API.md`; 404 (non-owner domain resource) vs 403 (RBAC) clarified in `TESTING.md`/`SECURITY.md`; ADR index corrected (0003–0005 were used in M2; M3 adds 0006–0008).
+- Updated `DATABASE.md`, `API.md`, `SECURITY.md`, `TESTING.md`, `TECH_STACK.md`, `ROADMAP.md`, `DEPLOYMENT.md`, `DATA_PRIVACY.md`, `PERFORMANCE.md`, `OBSERVABILITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `README.md`, `backend/README.md`, `.env.example`.
+
+### Verified (2026-08-21)
+- `./mvnw clean test` — 99 tests, all green (H2 fast suite). `./mvnw clean verify` — green, JaCoCo gate held (~88% overall).
+- Testcontainers PostgreSQL ITs executed for real against `postgres:16-alpine` (Docker available): `SchemaIT`, `TaskPersistenceIT` (3), `CustomerPersistenceIT` (4) — migrations, CHECK/UNIQUE constraints, FK cascade, and the PostgreSQL-only search bug all verified.
+- Ownership/security: USER→own 200, USER→other 404, ADMIN→any-by-id 200, ADMIN list own-only, client `ownerId` ignored, unauthenticated 401 — all asserted.
+
+### Not included (later milestones)
+- Spring AI/Ollama (M4), tool registry (M5), agent orchestration (M6), Redis memory (M7), guardrails (M8), audit (M9), metrics (M10), frontend (M13). No AI code added to the domain.
 
 ---
 

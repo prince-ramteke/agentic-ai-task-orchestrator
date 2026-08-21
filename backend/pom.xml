@@ -128,11 +128,25 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- === Milestone 3: real-PostgreSQL integration tests (versions managed by the Spring Boot BOM) ===
+             Verify the actual Flyway migrations + JPA mappings against real PostgreSQL. The *IT tests
+             skip cleanly (disabledWithoutDocker) when no Docker engine is present, so `mvn verify`
+             stays green everywhere while running for real in Docker-capable environments (ADR-0008). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!--
           Still deliberately NOT added (arrive with the milestone that needs them):
             - spring-boot-starter-data-redis      (M7 — conversation/session memory)
             - spring-ai-*                         (M4 — LLM integration)
-            - testcontainers                      (M3 — PostgreSQL integration tests)
             - kafka / prometheus / grafana infra  (later milestones)
           Persistence (JPA/PostgreSQL/Flyway) and Spring Security were added in M2 because
           the authentication domain genuinely requires them (supersedes ADR-0002 for security data).
@@ -165,6 +179,38 @@
             </plugin>
 
             <!--
+              Failsafe runs the Testcontainers integration tests (*IT) in the integration-test/verify
+              phases; surefire keeps running the fast unit + H2 functional suite (*Test). ITs that are
+              disabled without Docker are reported as skipped, not failed, so `mvn verify` stays green.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <!--
+                      Pin the Docker Remote API version for docker-java/Testcontainers. The docker-java
+                      client bundled with Testcontainers 1.20.x negotiates an API version newer than
+                      Docker Engine 29 accepts (max 1.54), so its /info probe fails with HTTP 400 and
+                      Testcontainers reports "no valid Docker environment". 1.44 is within every modern
+                      engine's supported range (server min here is 1.40), so this is portable across
+                      local Docker Desktop and Linux CI. Without Docker, ITs still skip via
+                      @Testcontainers(disabledWithoutDocker = true).
+                    -->
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
               JaCoCo: coverage REPORTING only in Milestone 1 (no enforcement gate yet).
               Enforcement thresholds are activated in Milestone 3 once real domain logic
               exists (see docs/TESTING.md). This keeps `mvn verify` green and honest.
@@ -173,6 +219,21 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
+                <!--
+                  Coverage is measured from the surefire (*Test) suite, which exercises
+                  controllers/services/mappers/entities/security on H2 — so the gate holds even
+                  when the Docker-gated *IT tests are skipped. Excludes keep the gate focused on
+                  business logic rather than scaffolding: the bootstrap class, config, and record
+                  DTOs/response envelopes (compiler-generated accessors, no branches to test).
+                -->
+                <configuration>
+                    <excludes>
+                        <exclude>com/prince/agentic/AgenticApplication.class</exclude>
+                        <exclude>com/prince/agentic/config/**</exclude>
+                        <exclude>**/dto/**</exclude>
+                        <exclude>com/prince/agentic/common/response/**</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -186,6 +247,27 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.75</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -7,6 +7,12 @@
 
 > **Milestone 2 status:** security-relevant events are logged (INFO: successful registration/login by user id; WARN: failed login attempts, unauthorized/forbidden requests, rejected bearer tokens by exception type). **Never logged:** passwords, password hashes, raw JWTs, or the JWT secret (`DATA_PRIVACY.md`). Login is logged by user id (and, on failure, the attempted email for brute-force analysis) — not the token or password.
 
+> **Milestone 3 status:** domain lifecycle events are logged at INFO with **ids only** —
+> `task.created|updated|deleted id={} owner={}` and `customer.created|updated|deleted id={} owner={}`.
+> **Never logged:** task titles/descriptions, or customer names/emails/phones (`DATA_PRIVACY.md`).
+> Validation/authorization failures continue to surface through the global handler at WARN with the
+> per-response `traceId`.
+
 ## 1. Correlation & execution IDs
 
 - **`correlationId`** — one per HTTP request, generated at the edge (or accepted from a trusted header), attached to the logging MDC and propagated through the call.
