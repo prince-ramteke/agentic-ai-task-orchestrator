@@ -1,7 +1,10 @@
 # Tool System
 ## Agentic AI Task Orchestrator
 
-> The contract every future tool must satisfy. No tools are implemented yet (planned M5+).
+> The contract every future tool must satisfy. **No tools are implemented yet (planned M5+).** M4
+> built the LLM layer *below* where tools will live (`LlmClient`/`AiService`), but deliberately no
+> tool registry, tool interface, or function-calling wiring — the model cannot invoke anything. Tools
+> arrive in M5 and sit **above** this layer, on the deterministic application side.
 
 ## 1. What a tool is
 

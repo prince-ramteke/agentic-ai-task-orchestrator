@@ -9,7 +9,31 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 4 — Spring AI + Ollama Integration (not started)._
+_Next: Milestone 5 — Tool Registry & Tool Execution Framework (not started)._
+
+---
+
+## [0.0.4] — 2026-08-21 — Milestone 4: Spring AI + Ollama Integration
+
+### Added
+- **LLM provider abstraction** (`ai.llm` package): `LlmClient` interface (`generate`, `generateStructured`, `info`) — the single, provider-agnostic path to the model — and `LlmProviderInfo` (project-owned metadata record). `OllamaLlmClient` (the only class importing `org.springframework.ai.*`) implements it via **Spring AI 1.0.9** over local **Ollama**; `FakeLlmClient` (test) implements it deterministically with no network.
+- **AI application layer** (`ai` package): `AiService` (prompt → LlmClient → Bean-Validation of structured output → bounded one-repair → application DTOs; metadata-only logging + Micrometer metrics), `PromptService` + versioned templates (`resources/prompts/generate.st`, `classify.st`, untrusted input delimited), `AiController` with authenticated `POST /api/v1/ai/generate` and `POST /api/v1/ai/classify`.
+- **AI exception model**: `LlmException extends ApiException` + `LlmUnavailableException` (503 `LLM_UNAVAILABLE`), `LlmTimeoutException` (504 `LLM_TIMEOUT`), `LlmProviderException` (502 `LLM_PROVIDER_ERROR`), `LlmInvalidOutputException` (422 `LLM_INVALID_OUTPUT`) — rendered by the existing `GlobalExceptionHandler`, no new handler.
+- **Structured output** via Spring AI's converter into `AiClassificationResult{category,priority,summary}`, re-validated as untrusted; API response `AiClassificationResponse` adds server-supplied `model`/`provider`.
+- **Config**: `spring-ai-bom` 1.0.9 import + `spring-ai-starter-model-ollama`; `LlmProperties` + `AiConfig` (ChatClient bean, explicit connect/read timeout, `spring.ai.retry` max-attempts 2, `pull-model-strategy: never`). Env vars `OLLAMA_TEMPERATURE`, `OLLAMA_TIMEOUT_SECONDS` added to `.env.example`.
+- **Tests (+44 surefire → 143 total)**: `AiServiceTest` (text/structured/repair/invalid/provider paths), `AiControllerTest` (200/400/401/502/503/504/422 envelope), `AiIntegrationTest` (full context via FakeLlmClient — **boots and serves with no Ollama**), `PromptServiceTest`, `AiDtoValidationTest`, `FakeLlmClientTest`, `LlmExceptionTest`, `OllamaLlmClientTest` (error mapping), `ArchitectureBoundaryTest` (AI↔domain + Spring-AI import isolation), and a **profile-gated live Ollama IT** (skipped in normal `verify`; run separately against real `llama3.2`, 3/3 PASS).
+
+### Changed
+- `pom.xml`: added the Spring AI BOM (`dependencyManagement`) + Ollama starter; JaCoCo excludes extended to `ai/config/**` and `ai/llm/ollama/**` (provider/infra). Boot **stays 3.4.1** (ADR-0009).
+
+### Fixed
+- Out-of-range enum values from a real model (surfaced by the live Ollama run: `priority: "FEATURE"`) now map to `LLM_INVALID_OUTPUT` (422) and feed the bounded repair path, instead of a generic provider error.
+
+### Security
+- AI endpoints authenticated by default (no `PUBLIC_ENDPOINTS` change); input bounded (≤4000, `@NotBlank`); no DB/tool access from the AI layer; prompts/responses never logged in full; local-first (`LLM_FALLBACK_ENABLED=false`, no cloud provider wired).
+
+### Docs
+- ADR-0009 (LLM provider abstraction & Ollama default), ADR-0010 (structured output strategy); updated `TECH_STACK`, `API`, `AGENT_ARCHITECTURE`, `TOOL_SYSTEM`, `DATA_PRIVACY`, `SECURITY`, `OBSERVABILITY`, `PERFORMANCE`, `TESTING`, `DEPLOYMENT`, `ROADMAP`, `README`, `backend/README`, `.env.example`.
 
 ---
 

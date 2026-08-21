@@ -1,7 +1,12 @@
 # Agent Architecture
 ## Agentic AI Task Orchestrator
 
-> Conceptual. Nothing here is implemented yet (planned M4–M9).
+> Conceptual. The agent itself is not implemented (planned M6–M9). **As of M4**, only the LLM
+> *foundation* this design sits on exists: the `LlmClient` abstraction (`com.prince.agentic.ai.llm`)
+> with an Ollama implementation, `AiService`, prompt templates, structured-output validation, and an
+> AI exception model. There is **no** orchestrator, tool selection, tool registry, or ReAct loop yet —
+> M4 is deliberately "the model behind an interface", nothing more. The future agent will call
+> `LlmClient` (never a vendor SDK) and dispose over tools that wrap the M3 domain services.
 
 ## 1. What "agent" means here
 

@@ -55,12 +55,13 @@ Related ADRs, docs, issues.
 | ADR-0006 | Core domain ownership model | M3 | Accepted |
 | ADR-0007 | Domain persistence & primary-key strategy | M3 | Accepted |
 | ADR-0008 | Testcontainers PostgreSQL integration testing | M3 | Accepted |
+| ADR-0009 | LLM provider abstraction & Ollama local-default strategy | M4 | Accepted |
+| ADR-0010 | Structured LLM output strategy | M4 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| LLM provider strategy (Ollama default, fallback) | M4 |
 | Tool authorization model | M5 |
 | Agent orchestration model | M6 |
 | Redis for conversation/execution memory | M7 |

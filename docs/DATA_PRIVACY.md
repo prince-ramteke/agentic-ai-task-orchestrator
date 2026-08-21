@@ -3,6 +3,12 @@
 
 > Conceptual policy. Guides how user data, prompts, outputs, logs, and external providers are handled. Applied as features are built.
 
+> **Milestone 4 status:** the LLM layer is live and **local-first**. Prompts and model output are
+> **never logged in full** (metadata only: provider, model, duration, outcome). The AI layer sends
+> **no database/Task/Customer data** to the model in M4 — only the caller's own request text. No
+> external provider is wired (`LLM_FALLBACK_ENABLED=false`), so no user data leaves the machine.
+> Model output is treated as untrusted (validated before use).
+>
 > **Milestone 3 status:** the first user content is stored — `tasks` (title/description/…) and
 > `customers` (name/email/phone/status). It is kept minimal and **owner-scoped** (a user only ever
 > reads their own rows; a non-owner gets 404). Domain logs contain **ids only** (`task.created id=… owner=…`)

@@ -11,7 +11,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 1 | Backend Foundation | ✅ |
 | 2 | Authentication & Authorization | ✅ |
 | 3 | Core Domain | ✅ |
-| 4 | Spring AI Integration | ⬜ |
+| 4 | Spring AI Integration | ✅ |
 | 5 | Tool Registry | ⬜ |
 | 6 | Agent Orchestration | ⬜ |
 | 7 | Memory | ⬜ |
@@ -60,13 +60,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `DATABASE.md`, `API.md`, `SECURITY.md`, `TESTING.md`, `TECH_STACK.md`, `DEPLOYMENT.md`, `DATA_PRIVACY.md`, `PERFORMANCE.md`, `OBSERVABILITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
 - **Deferred:** cross-user admin listing (dedicated admin API, later); soft delete; Spring AI/agent (M4+).
 
-### Milestone 4 — Spring AI Integration ⬜
+### Milestone 4 — Spring AI Integration ✅
 - **Objective:** LLM provider abstraction (`LlmClient`) over Ollama, with output parsed/validated into typed objects.
 - **Prerequisites:** M3.
-- **Outputs:** provider abstraction + Ollama impl; prompt templates in config/code; typed output parsing + repair/retry; `FakeLlmClient` for tests.
-- **Validation:** unit tests with the fake; malformed-output (422/repair) path tested; no live LLM in CI.
-- **Docs:** `AGENT_ARCHITECTURE.md` (model responsibilities), `TECH_STACK.md` (ADR for provider strategy), `DATA_PRIVACY.md`, `CHANGELOG.md`.
-- **DoD:** abstraction is the only path to the model; tests deterministic.
+- **Delivered (IMPLEMENTED + VERIFIED):** `com.prince.agentic.ai` feature — `LlmClient` abstraction (`generate`/`generateStructured`/`info`), `OllamaLlmClient` via **Spring AI 1.0.9** (`spring-ai-starter-model-ollama`, `spring-ai-bom`, Boot 3.4.1 unchanged — ADR-0009), `FakeLlmClient` (test), `AiService` (validation + bounded one-repair), `PromptService` + templates, AI exception model (`LLM_UNAVAILABLE`/`LLM_TIMEOUT`/`LLM_PROVIDER_ERROR`/`LLM_INVALID_OUTPUT` via the existing `ApiException`/`GlobalExceptionHandler`), timeout + conservative retry, structured output via Spring AI converter re-validated with Bean Validation (ADR-0010), authenticated `POST /api/v1/ai/generate` + `/classify`, `llm.request.*` metrics, `ArchitectureBoundaryTest` enforcing AI↔domain isolation. **No** agent/tools/Redis/guardrails/fallback.
+- **Validation (VERIFIED 2026-08-21):** `./mvnw clean test` PASS (143 surefire); `./mvnw clean verify` PASS with the coverage gate held (~88%); Testcontainers Postgres ITs ran for real; the gated live Ollama IT is **skipped** in normal `verify` and was **run separately against real `llama3.2` (3/3 PASS)** — live model VERIFIED. The live run also surfaced and drove a fix: out-of-range model enums now map to `LLM_INVALID_OUTPUT` and feed the repair path.
+- **Decisions:** ADR-0009 (LLM provider abstraction & Ollama default), ADR-0010 (structured output strategy).
+- **Docs updated:** `TECH_STACK.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `DATA_PRIVACY.md`, `SECURITY.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `API.md`, `TESTING.md`, `DEPLOYMENT.md`, `.env.example`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `ADR/README.md`.
+- **Deferred:** tool registry/tool-calling (M5), agent orchestration (M6), Redis/memory (M7), guardrails/confirmation (M8), agent audit (M9), Prometheus/Grafana dashboards (M10), cloud fallback provider (documented future).
 
 ### Milestone 5 — Tool Registry ⬜
 - **Objective:** Explicit, typed, authorized, audited tool contract and registry with the first read-only + deterministic tools.

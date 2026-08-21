@@ -26,8 +26,34 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  # --- Spring AI / Ollama (M4). Local-first: no user data leaves the machine (DATA_PRIVACY.md). ---
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      # Never auto-download a model at startup; a missing model surfaces as a request-time error,
+      # not a silent multi-GB pull. This also lets the app boot while Ollama is stopped.
+      init:
+        pull-model-strategy: never
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:llama3.2}
+          temperature: ${OLLAMA_TEMPERATURE:0.2}
+    # Conservative retry of transient provider failures only; never retry 4xx/validation.
+    retry:
+      max-attempts: 2
+      on-client-errors: false
+
 app:
   version: @project.version@
+
+# --- LLM layer (the app's own keys, kept independent of the spring.ai.* auto-config keys). ---
+llm:
+  provider: ${LLM_PROVIDER:ollama}          # ollama (only wired provider in M4; openai is future/not wired)
+  request-timeout-seconds: ${OLLAMA_TIMEOUT_SECONDS:60}
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:llama3.2}
+    temperature: ${OLLAMA_TEMPERATURE:0.2}
 
 # --- Security (JWT / CORS). Secrets come from the environment; never commit real values. ---
 security:

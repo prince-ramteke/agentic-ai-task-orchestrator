@@ -27,6 +27,9 @@ security:
   cors:
     allowed-origins: http://localhost:5173
 
+# M4: no live model in tests. The OllamaLlmClient bean IS constructed (provider=ollama), but its
+# Spring AI beans build network-free at startup (pull-model-strategy=never), so no test calls Ollama.
+# Tests that exercise the AI layer inject a FakeLlmClient (@Primary) instead of hitting the model.
 logging:
   level:
     root: WARN

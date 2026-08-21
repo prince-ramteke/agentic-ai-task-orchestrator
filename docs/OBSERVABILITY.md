@@ -5,6 +5,14 @@
 
 > **Milestone 1 status:** structured SLF4J/Logback logging is active with per-profile levels; Actuator exposes `health`+`info` only. Error responses carry a **per-response `traceId`** (a generated UUID, logged alongside the response) — a real, honest identifier, but **not** yet request-wide correlation. MDC-based correlation-ID propagation and the Micrometer/Prometheus/Grafana metrics below are PLANNED (M10).
 
+> **Milestone 4 status:** the AI layer emits the first **Micrometer** metrics — `llm.request.duration`
+> (timer) and `llm.request.result` (counter), tagged `op`/`provider`/`model`/`outcome` (bounded
+> cardinality) — via the existing `MeterRegistry`. `AiService` logs completion at INFO with metadata
+> only (`ai.generate|classify provider=… model=… outcome=…`) and repair attempts at WARN. **Never
+> logged:** full prompts or full model responses. **Token usage** is not recorded — the chosen Ollama
+> path does not expose a reliable value in M4 (documented UNAVAILABLE, not fabricated). The Prometheus
+> scrape endpoint and dashboards remain PLANNED (M10).
+
 > **Milestone 2 status:** security-relevant events are logged (INFO: successful registration/login by user id; WARN: failed login attempts, unauthorized/forbidden requests, rejected bearer tokens by exception type). **Never logged:** passwords, password hashes, raw JWTs, or the JWT secret (`DATA_PRIVACY.md`). Login is logged by user id (and, on failure, the attempted email for brute-force analysis) — not the token or password.
 
 > **Milestone 3 status:** domain lifecycle events are logged at INFO with **ids only** —

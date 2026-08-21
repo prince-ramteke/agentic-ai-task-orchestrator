@@ -11,3 +11,5 @@ management:
 logging:
   level:
     com.prince.agentic: DEBUG
+    # Spring AI at DEBUG locally to inspect model wiring during development (never logs full prompts by us).
+    org.springframework.ai: DEBUG

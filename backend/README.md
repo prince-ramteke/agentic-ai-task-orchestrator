@@ -1,9 +1,11 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 3** it provides the backend foundation, the
-authentication & authorization boundary (JWT, BCrypt, RBAC, user/role persistence), and the first
-user-owned business domains — **Task** and **Customer** (CRUD, ownership, pagination/filtering,
-PostgreSQL). No Spring AI or agent functionality yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+Spring Boot backend module. Through **Milestone 4** it provides the backend foundation, the
+authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
+domains (CRUD, ownership, pagination, PostgreSQL), and the **LLM foundation** — an `LlmClient`
+abstraction over local **Ollama** via **Spring AI 1.0.9**, with `AiService`, validated structured
+output, and authenticated `/api/v1/ai/*` demo endpoints. **No tool registry or agent yet** (M5–M6;
+see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -13,8 +15,15 @@ PostgreSQL). No Spring AI or agent functionality yet (see [`../docs/ROADMAP.md`]
 ## Build & test (no infrastructure)
 
 ```bash
-./mvnw verify        # 99 fast tests on H2 running the production Flyway migrations, + coverage gate
+./mvnw verify        # 143 fast tests on H2 running the production Flyway migrations, + coverage gate
 ```
+
+**Live Ollama test (optional, opt-in).** The AI suite never needs a model, but you can verify a real
+one end-to-end (needs `ollama serve` running and `ollama pull llama3.2`):
+```bash
+./mvnw -Dllm.live.ollama=true -Dit.test=OllamaLlmClientLiveIT verify
+```
+It is **skipped** in a normal `./mvnw verify`.
 
 Testcontainers PostgreSQL integration tests (`*IT`) run in `verify` **when a Docker engine is
 available** (they verify the real migrations/constraints on `postgres:16-alpine`); without Docker
@@ -39,6 +48,7 @@ Default port: `8080`. Default profile: `local`. Flyway applies the schema at sta
 | `GET /api/v1/admin/ping` | ADMIN | RBAC demonstration |
 | `GET/POST /api/v1/tasks` · `GET/PUT/DELETE /api/v1/tasks/{id}` | Bearer | User-owned tasks (CRUD, pagination, filters) |
 | `GET/POST /api/v1/customers` · `GET/PUT/DELETE /api/v1/customers/{id}` | Bearer | User-owned customers (CRUD, search) |
+| `POST /api/v1/ai/generate` · `POST /api/v1/ai/classify` | Bearer | LLM text + typed classification (M4; needs Ollama, else `503 LLM_UNAVAILABLE`) |
 | `GET /api/v1/health` · `/actuator/health` · `/actuator/info` | public | Liveness / metadata |
 | `GET /swagger-ui.html` | public | Swagger UI (click **Authorize** to send a JWT) |
 
@@ -68,10 +78,14 @@ com.prince.agentic
 ├── admin/                        # AdminController (/api/v1/admin/ping)
 ├── task/                         # Task entity/enums, repository, service, controller, mapper, DTOs
 ├── customer/                     # Customer entity/enum, repository, service, controller, mapper, DTOs
+├── ai/                           # M4 LLM layer: AiController, AiService, dto/, prompt/PromptService,
+│                                 #   llm/ (LlmClient abstraction, exception model, ollama/OllamaLlmClient),
+│                                 #   config/ (LlmProperties, AiConfig) — only ai.llm.ollama imports Spring AI
 ├── common/query/                 # SortWhitelist (page/size clamp + sort whitelist)
 └── health/                       # HealthController, HealthResponse
 
 resources/db/migration/           # V1 (users/roles), V2 (seed roles), V3 (tasks), V4 (customers)
+resources/prompts/                # generate.st, classify.st (versioned prompt templates)
 ```
 
 Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profiles). The reported version is filtered in from the build at package time.
@@ -85,7 +99,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Spring AI/Ollama (M4), tool registry (M5), the agent runtime (M6+), Redis (M7). Dependencies are added by the milestone that needs them. (Domain CRUD and Testcontainers-PostgreSQL landed in M3.)
+Tool registry (M5), the agent runtime (M6+), Redis (M7), guardrails (M8), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (Spring AI/Ollama landed in M4 — the `LlmClient` layer only, no tools or agent.)
 
 ## Docker
 

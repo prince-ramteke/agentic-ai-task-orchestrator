@@ -3,6 +3,14 @@
 
 > Conceptual. No performance work or measurements exist yet. **Never cite a number that wasn't actually measured on this system.**
 
+> **Milestone 4 note (LLM latency):** LLM calls are slow relative to normal backend ops, so every
+> call has an explicit **connect + read timeout** (`OLLAMA_TIMEOUT_SECONDS`, default 60s) and a
+> conservative retry (Spring AI `RetryTemplate`, max 2, transient only — never on 4xx/validation).
+> Per-request model calls are bounded (classification does at most **one** repair → two calls). Request
+> duration is measured via the `llm.request.duration` Micrometer timer, but **no latency numbers are
+> claimed** here — the live model run was a correctness check, not a benchmark. No DB transaction spans
+> an LLM call (the AI layer touches no database).
+>
 > **Milestone 3 note (design, not benchmarked):** the Task/Customer list endpoints are bounded and
 > indexed by design — every collection query is `owner_id`-scoped in SQL (never load-all-then-filter),
 > page size is clamped to ≤100, sort fields are whitelisted, and the ownership/filter columns are

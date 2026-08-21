@@ -7,6 +7,21 @@
 
 > **Milestone 2 status (VERIFIED 2026-08-21):** **39 tests total, all green** under `./mvnw verify`. Security suite: `AuthIntegrationTest` (20, `@SpringBootTest` + MockMvc through the real filter chain — register/login/JWT/RBAC/error-envelopes/password-hash/DB-constraint), `AuthHttpSocketTest` (3, `RANDOM_PORT` + `TestRestTemplate` — **real socket-level HTTP** over embedded Tomcat), `JwtServiceTest` (4 — roundtrip, expired, malformed, forged signature), `AuthorizationServiceTest` (4 — owner/admin/other/null ownership). Tests run against **H2 in PostgreSQL-compat mode executing the production Flyway migrations** — reproducible without Docker (ADR-0005). Testcontainers-PostgreSQL integration is deferred to M3.
 
+> **Milestone 4 status (VERIFIED 2026-08-21):** **143 fast tests** (surefire; +44 for the AI layer),
+> all green under `./mvnw verify` with the coverage gate held (~88%). AI tests are deterministic and
+> **never touch a live model**: `AiServiceTest` (text/structured/validation-repair/invalid-output/
+> provider paths with a mocked `LlmClient`), `AiControllerTest` (200/400/401 and the 502/503/504/422
+> LLM-error envelope, `@MockitoBean AiService`), `AiIntegrationTest` (full `@SpringBootTest` context
+> with a `@Primary FakeLlmClient` — proves the app **boots and serves AI with Ollama absent**),
+> `PromptServiceTest`, `AiDtoValidationTest`, `FakeLlmClientTest`, `LlmExceptionTest`,
+> `OllamaLlmClientTest` (transport → `LlmException` mapping), and `ArchitectureBoundaryTest` (the AI
+> package must not reference the Task/Customer domains or persistence, and only `ai.llm.ollama`/
+> `ai.config` may import Spring AI). A **gated live Ollama IT** (`OllamaLlmClientLiveIT`) is **skipped**
+> in normal `verify`; run it explicitly against a running Ollama:
+> `./mvnw -Dllm.live.ollama=true -Dit.test=OllamaLlmClientLiveIT verify` (needs `ollama serve` +
+> `ollama pull llama3.2`). It was run for M4 (**3/3 PASS** against real `llama3.2`) — live model
+> VERIFIED. JaCoCo excludes now also cover `ai/config/**` and `ai/llm/ollama/**` (provider/infra).
+>
 > **Milestone 3 status (VERIFIED 2026-08-21):** **99 fast tests** (surefire, H2 in PostgreSQL-mode)
 > plus **Testcontainers PostgreSQL integration tests** (`*IT`, failsafe). Fast suite adds unit tests
 > (`SortWhitelistTest`, `Task`/`Customer` mapper + service with Mockito) and `@SpringBootTest`+MockMvc

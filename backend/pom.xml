@@ -30,7 +30,24 @@
         <springdoc.version>2.7.0</springdoc.version>
         <!-- JJWT: single, cohesive JWT library (HS256). See docs/ADR/0004-jwt-authentication-strategy.md. -->
         <jjwt.version>0.12.6</jjwt.version>
+        <!-- Spring AI: 1.0.x is the line compatible with Spring Boot 3.4.x (1.1.x needs 3.5, 2.x needs Boot 4).
+             The BOM governs only spring-ai-* artifacts; the Boot parent stays 3.4.1. See ADR-0009. -->
+        <spring-ai.version>1.0.9</spring-ai.version>
     </properties>
+
+    <!-- Import the Spring AI BOM so spring-ai-* artifact versions are managed centrally.
+         This does NOT change the Spring Boot version (inherited from the parent). -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web (REST) -->
@@ -56,6 +73,14 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- === Milestone 4: Spring AI (LLM integration) ===
+             Provider abstraction over a local Ollama runtime. Version from spring-ai-bom (1.0.9).
+             No tool-calling/function modules, no vector store, no Redis — those arrive with M5/M7. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
         </dependency>
 
         <!-- === Milestone 2: Authentication & Authorization === -->
@@ -232,6 +257,9 @@
                         <exclude>com/prince/agentic/config/**</exclude>
                         <exclude>**/dto/**</exclude>
                         <exclude>com/prince/agentic/common/response/**</exclude>
+                        <!-- M4: provider-specific wiring/config (infra, exercised by the gated live IT, not unit-tested). -->
+                        <exclude>com/prince/agentic/ai/config/**</exclude>
+                        <exclude>com/prince/agentic/ai/llm/ollama/**</exclude>
                     </excludes>
                 </configuration>
                 <executions>

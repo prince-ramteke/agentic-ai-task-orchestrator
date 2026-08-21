@@ -1,6 +1,6 @@
 # Agentic AI Task Orchestrator
 
-> **Project status: 🟢 Milestone 3 — Core Domain (complete & verified).** On top of the M2 auth boundary, the first user-owned business domains — **Task** and **Customer** — are implemented with full CRUD, server-enforced ownership (404-masking, admin-any-by-id), pagination/filtering, PostgreSQL persistence via Flyway, and real-PostgreSQL Testcontainers tests (99 fast tests green + integration tests). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+> **Project status: 🟢 Milestone 4 — Spring AI + Ollama (complete & verified).** On top of the M3 domain, the app now has a clean, provider-agnostic **LLM foundation**: an `LlmClient` abstraction over local **Ollama** via **Spring AI 1.0.9** (Spring Boot stays 3.4.1), an `AiService` with validated structured output and bounded repair, an AI-specific error model, and two authenticated demo endpoints (`POST /api/v1/ai/generate`, `/classify`). Tests are deterministic and need no model (143 fast tests green + a **gated** live Ollama IT run against real `llama3.2`, 3/3). **This is the model behind an interface — not the agent** (no tools/planning yet; M5–M6). Everything below marked _Planned_ describes the intended system, not shipped functionality. See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Overview
 
@@ -87,6 +87,13 @@ curl -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: applic
 
 Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html), log in via `/api/v1/auth/login`, click **Authorize**, and call `GET /api/v1/me`. As of **M3** you can also exercise the domain APIs — `/api/v1/tasks` and `/api/v1/customers` (CRUD, pagination, filtering); each user sees only their own resources.
 
+**AI endpoints (M4).** With [Ollama](https://ollama.com) running (`ollama serve`) and the model pulled (`ollama pull llama3.2`), call the authenticated LLM endpoints:
+```bash
+curl -X POST http://localhost:8080/api/v1/ai/generate -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"prompt":"Summarize what an agentic orchestrator does in one sentence."}'
+```
+`POST /api/v1/ai/classify` returns a typed, validated `{category, priority, summary}`. The app boots even **without** Ollama — AI calls then return `503 LLM_UNAVAILABLE`. Model, base URL, temperature, and timeout are env-configurable (`OLLAMA_MODEL`/`OLLAMA_BASE_URL`/`OLLAMA_TEMPERATURE`/`OLLAMA_TIMEOUT_SECONDS`). This is the LLM layer only — **not** the agent (M6).
+
 > _Planned (Milestone 12)._ The full one-command stack (`docker-compose up --build`, bringing up PostgreSQL, Redis, Ollama, Prometheus, Grafana, and the frontend) is not implemented yet. Copy [`.env.example`](.env.example) to `.env` when those services arrive; M1 itself needs no environment variables. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Project Status
@@ -97,7 +104,8 @@ Open [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.ht
 | Backend foundation (Spring Boot skeleton, health, error model, OpenAPI, CI) | ✅ Implemented & verified (M1) |
 | Authentication & authorization (JWT, BCrypt, RBAC, user/role persistence) | ✅ Implemented & verified (M2) |
 | Core domain (tasks, customers — CRUD, ownership, pagination, PostgreSQL, Testcontainers) | ✅ Implemented & verified (M3) |
-| Spring AI + tool registry | ⬜ Planned (M4–M5) |
+| LLM foundation (`LlmClient` over Ollama via Spring AI, `AiService`, structured output, `/api/v1/ai/*`) | ✅ Implemented & verified (M4) |
+| Tool registry | ⬜ Planned (M5) |
 | Agent orchestration | ⬜ Planned (M6) |
 | Memory / guardrails / audit | ⬜ Planned (M7–M9) |
 | Observability | ⬜ Planned (M10) |

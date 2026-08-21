@@ -93,7 +93,7 @@ List endpoints accept `page` (0-based), `size` (bounded max), `sort` (`field,asc
 - Missing/invalid/expired/forged token on a protected route → **401 `UNAUTHORIZED`**.
 - Authenticated but insufficient role → **403 `FORBIDDEN`**.
 
-Machine error codes in the envelope (`error` field): `VALIDATION_ERROR`, `MALFORMED_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `INTERNAL_ERROR`.
+Machine error codes in the envelope (`error` field): `VALIDATION_ERROR`, `MALFORMED_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EMAIL_ALREADY_EXISTS`, `INVALID_CREDENTIALS`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `INTERNAL_ERROR`, and (M4, AI layer) `LLM_UNAVAILABLE`, `LLM_TIMEOUT`, `LLM_PROVIDER_ERROR`, `LLM_INVALID_OUTPUT`.
 
 ### Task & Customer endpoints (M3) — VERIFIED
 
@@ -126,6 +126,27 @@ param → 400 `VALIDATION_ERROR`.
 **Field validation.** Task: `title` required ≤200; `description` ≤2000; `estimatedHours` ≥0, ≤9999.99;
 `status`/`priority` valid enum values. Customer: `name` required ≤150; `email` valid & ≤255; `phone`
 ≤30 (digits/spaces/`+-()`); `status` valid enum. Violations → 400 with `fieldErrors`.
+
+### AI (LLM) endpoints (M4) — VERIFIED
+
+Minimal demonstration of the LLM infrastructure layer. **Authenticated** (deny-by-default). This is
+**not** the agent — no tools, planning, or autonomy (that is M6). All responses are application DTOs;
+no raw provider object is ever returned.
+
+| Method | Path | Success | Notes |
+|---|---|---|---|
+| POST | `/api/v1/ai/generate` | 200 | body `{ "prompt": "…" }` (`@NotBlank`, ≤4000) → `{ content, model, provider }` |
+| POST | `/api/v1/ai/classify` | 200 | body `{ "text": "…" }` (`@NotBlank`, ≤4000) → `{ category, priority, summary, model, provider }` |
+
+`classify` returns a **typed, validated** result: `category ∈ {BUG,FEATURE,QUESTION,OTHER}`,
+`priority ∈ {LOW,MEDIUM,HIGH}`. The model produces `{category,priority,summary}` via Spring AI's
+structured-output converter; the service re-validates it (Bean Validation) and repairs once before
+failing. Provider/model metadata is server-supplied, never model output.
+
+**AI error codes** (standard envelope): **503 `LLM_UNAVAILABLE`** (provider down / model missing),
+**504 `LLM_TIMEOUT`** (read timeout), **502 `LLM_PROVIDER_ERROR`** (other provider/runtime failure),
+**422 `LLM_INVALID_OUTPUT`** (model output failed validation after one repair). Input violations →
+**400 `VALIDATION_ERROR`**; unauthenticated → **401 `UNAUTHORIZED`**.
 
 ## 7. Planned endpoints (design only — not implemented)
 

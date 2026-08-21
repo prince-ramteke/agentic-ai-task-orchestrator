@@ -1,6 +1,14 @@
 # Security Model
 ## Agentic AI Task Orchestrator
 
+> **Milestone 4 status (AI layer):** `/api/v1/ai/**` is authenticated by the existing deny-by-default
+> policy (no `PUBLIC_ENDPOINTS` change; a 401 test guards it). Input is bounded and validated
+> (`@NotBlank`, ≤4000 → 400). The AI layer performs **no** database access, ownership decisions, or
+> tool execution, and grants the caller no capability beyond an LLM call. **Model output is untrusted**
+> — structured output is re-validated (Bean Validation) before use, and no raw provider object is
+> returned. Prompts are not a security boundary (delimited-input is defense-in-depth only); deeper
+> prompt-injection/guardrail handling is deferred to M8. No secrets are logged or sent to any model.
+>
 > **Milestone 2 status: authentication & authorization IMPLEMENTED and VERIFIED.** The core
 > auth boundary (JWT, BCrypt, RBAC, deny-by-default) is live and tested. Ownership enforcement
 > on domain resources and AI-tool authorization are foundations here and are wired up in later
