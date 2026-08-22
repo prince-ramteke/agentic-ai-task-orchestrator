@@ -67,6 +67,14 @@ agent:
     context-max-messages: ${AGENT_MEMORY_CONTEXT_MAX_MESSAGES:12}
     context-max-chars: ${AGENT_MEMORY_CONTEXT_MAX_CHARS:6000}
 
+# --- Guardrails (M8): backend-authoritative enforcement on top of the M5 tool/risk metadata and the
+#     M6 cooperative bounds. Confirmation state + per-user rate window live in Redis (separate
+#     namespaces from conversation memory). See docs/GUARDRAILS.md. ---
+guardrail:
+  confirmation-ttl-seconds: ${AGENT_CONFIRMATION_TTL_SECONDS:300}
+  user-tool-budget-per-min: ${AGENT_USER_TOOL_BUDGET_PER_MIN:60}
+  max-argument-chars: ${AGENT_MAX_ARGUMENT_CHARS:4000}
+
 # --- LLM layer (the app's own keys, kept independent of the spring.ai.* auto-config keys). ---
 llm:
   provider: ${LLM_PROVIDER:ollama}          # ollama (only wired provider in M4; openai is future/not wired)

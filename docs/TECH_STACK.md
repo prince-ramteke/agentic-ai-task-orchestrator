@@ -74,3 +74,15 @@ React + Vite + TypeScript · Axios (typed API layer) · React Router. A componen
 ## Milestone 6 — Agent Orchestration (no new dependencies)
 
 M6 added the `com.prince.agentic.agent` layer (orchestrator, planner, decision contract, tool-catalog adapter, bounded observations, cooperative budgets, loop detection, `POST /api/v1/agent/execute`) using **only existing dependencies**: Spring Web/Security/Validation, Jackson, Micrometer, the M4 `LlmClient`, and JUnit 5/Mockito/Testcontainers for tests. No new runtime or test dependency, no Flyway migration, no datastore. Spring AI stays confined to `OllamaLlmClient`; the agent uses the `LlmClient` abstraction. See ADR-0013…0016.
+
+## Milestone 8 — Guardrails & Agent Safety Enforcement (no new dependencies)
+
+M8 added the `com.prince.agentic.guardrail` layer (policy engine, risk/argument policies, SHA-256
+`FingerprintService`, Redis-backed single-use `RedisConfirmationService`, per-user `RedisRateLimiter`,
+guardrail/confirmation exceptions) and the orchestrator integration (confirmation halt, confirm/cancel
+endpoints) using **only existing dependencies**: Spring Web/Security/Validation, Jackson, Micrometer,
+the M7 `StringRedisTemplate` (Lettuce), and `java.security.MessageDigest` for fingerprinting; JUnit
+5/Mockito/Testcontainers for tests. **No new runtime or test dependency, no Bucket4j, no Flyway
+migration, no new datastore.** Confirmation and rate state reuse Redis under separate namespaces
+(`guard:confirmation:{id}`, `guard:rate:{userId}:{epochMinute}`). Spring Boot stays **3.4.1**. See
+ADR-0021…0025.

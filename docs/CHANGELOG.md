@@ -9,7 +9,28 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 8 — Guardrails (hard bounds, confirmation for dangerous ops, rate limiting). Not started._
+_Next: Milestone 9 — Durable audit (agent/tool execution records)._
+
+---
+
+## [0.0.8] — 2026-08-22 — Milestone 8: Guardrails & Agent Safety Enforcement
+
+### Added
+- **Guardrail module** (`com.prince.agentic.guardrail`): backend-authoritative `GuardrailEngine` between the validated `AgentDecision` and `ToolExecutor`, returning `ALLOW` / `DENY` / `REQUIRE_CONFIRMATION`. Ordered, pure `GuardrailPolicy` beans (first-non-ALLOW wins): `RiskPolicy` (descriptor-authoritative — READ_ONLY/DETERMINISTIC → ALLOW, SIDE_EFFECTING/HIGH_RISK → REQUIRE_CONFIRMATION; the model cannot downgrade risk) and `ArgumentSafetyPolicy` (size cap + blatant-marker deny-list, a documented modest heuristic — not a prompt-injection solution). `GuardrailProperties` (`guardrail.*`), `GuardrailConfig`.
+- **Confirmation** (`guardrail.confirmation`): `FingerprintService` (SHA-256 over userId+conversationId+toolName+canonical args+riskLevel); Redis-backed single-use `RedisConfirmationService` (`guard:confirmation:{id}`, TTL `AGENT_CONFIRMATION_TTL_SECONDS`, atomic `GETDEL`, owner-scoped, clock-checked expiry, fingerprint verify); records `PendingAction`/`Confirmation`/`PendingConfirmation`/`ConfirmedAction`.
+- **Rate limiting:** `RedisRateLimiter` — per-user fixed window `guard:rate:{userId}:{epochMinute}` (`INCR`/`EXPIRE`), budget `AGENT_USER_TOOL_BUDGET_PER_MIN`; consumed only on actual execution.
+- **Agent integration:** new `AgentStatus` terminals `PENDING_CONFIRMATION` / `BLOCKED`; `AgentResult.pending`; orchestrator gate before `ToolExecutor` (deny → BLOCKED, confirm → halt, allow → rate-limit → execute); `AgentConfirmationService` executes the exact stored action **exactly once**; `AgentConversationService` creates the fingerprint-bound confirmation.
+- **API:** `POST /api/v1/agent/confirmations/{id}` (confirm & execute, no body), `DELETE /api/v1/agent/confirmations/{id}` (cancel); `/execute` may now return `PENDING_CONFIRMATION` (+ safe `confirmation*` fields) or `BLOCKED` — additive, published shape preserved.
+- **Metrics:** `guardrail.{allow,deny,confirmation_required,confirmation_approved,confirmation_expired,rate_limited,policy_violation}` (low-cardinality labels only).
+
+### Changed
+- `AgentOrchestrator` now depends on `GuardrailEngine` + `RateLimiter`; no effect can occur before guardrail evaluation. Timeouts remain **layered** (LLM-provider + cooperative deadline + per-tool pre-execution check) and never force-cancel an in-flight write.
+
+### Security
+- Confirmation is single-use, owner-scoped, fingerprint-bound, replay/mutation/expiry-resistant; a foreign id is masked 404 and never consumes another user's action. Risk is descriptor-driven and the model cannot escalate; identity is always the verified principal. Prompt/memory-safety tests prove untrusted text cannot change risk/role/confirmation/identity. **Not a claim to solve all prompt injection** — the boundary is structural.
+
+### Docs
+- ADR-0021…0025; updated `GUARDRAILS.md`, `SECURITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `MEMORY.md`, `OBSERVABILITY.md`, `API.md`, `PERFORMANCE.md`, `DATA_PRIVACY.md`, `TESTING.md`, `TECH_STACK.md`, `AUDIT_LOGGING.md`, `README.md`, `.env.example`. M9 audit / M10 dashboards marked PLANNED.
 
 ---
 

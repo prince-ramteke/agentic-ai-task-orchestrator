@@ -3,6 +3,12 @@ package com.prince.agentic.agent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prince.agentic.agent.exception.AgentInvalidDecisionException;
 import com.prince.agentic.ai.llm.exception.LlmException;
+import com.prince.agentic.guardrail.GuardrailContext;
+import com.prince.agentic.guardrail.GuardrailDecision;
+import com.prince.agentic.guardrail.GuardrailEngine;
+import com.prince.agentic.guardrail.GuardrailOutcome;
+import com.prince.agentic.guardrail.RateLimiter;
+import com.prince.agentic.guardrail.confirmation.PendingAction;
 import com.prince.agentic.security.AuthenticatedUser;
 import com.prince.agentic.tool.ToolExecutionContext;
 import com.prince.agentic.tool.ToolExecutor;
@@ -42,10 +48,13 @@ public class AgentOrchestrator {
     private final Clock clock;
     private final MeterRegistry meters;
     private final ObjectMapper mapper;
+    private final GuardrailEngine guardrails;
+    private final RateLimiter rateLimiter;
 
     public AgentOrchestrator(AgentPlanner planner, ToolExecutor toolExecutor, AgentToolCatalog catalog,
                              ObservationSerializer observations, AgentProperties props, Clock clock,
-                             MeterRegistry meters, ObjectMapper mapper) {
+                             MeterRegistry meters, ObjectMapper mapper,
+                             GuardrailEngine guardrails, RateLimiter rateLimiter) {
         this.planner = planner;
         this.toolExecutor = toolExecutor;
         this.catalog = catalog;
@@ -54,6 +63,8 @@ public class AgentOrchestrator {
         this.clock = clock;
         this.meters = meters;
         this.mapper = mapper;
+        this.guardrails = guardrails;
+        this.rateLimiter = rateLimiter;
     }
 
     /** Public entry point: stateless (no conversation history), no external cancellation source. */
@@ -120,6 +131,22 @@ public class AgentOrchestrator {
                     return terminate(ex, AgentStatus.LOOP_DETECTED, "AGENT_LOOP_DETECTED", null);
                 }
 
+                // --- M8 guardrail gate (spec §11, §25): policy → confirmation → rate-limit → execute.
+                // No effect can occur before this passes. The engine is authoritative over risk.
+                GuardrailContext gctx = new GuardrailContext(ex.executionId(), ex.requestId());
+                GuardrailDecision guard = guardrails.evaluate(principal, decision, gctx);
+                if (guard.outcome() == GuardrailOutcome.DENY) {
+                    return terminate(ex, AgentStatus.BLOCKED, guard.reasonCode(), null);
+                }
+                if (guard.requiresConfirmation()) {
+                    PendingAction pending =
+                            new PendingAction(decision.tool(), decision.arguments(), guard.riskLevel());
+                    return terminatePending(ex, pending);
+                }
+                if (!rateLimiter.tryAcquire(principal.userId())) {
+                    return terminate(ex, AgentStatus.BLOCKED, "RATE_LIMITED", null);
+                }
+
                 ToolExecutionContext ctx = new ToolExecutionContext(
                         principal, ex.requestId(), ex.executionId(), Map.of());
                 ToolResult<Object> result = toolExecutor.execute(
@@ -143,6 +170,23 @@ public class AgentOrchestrator {
                 ex.executionId(), status, ex.iteration(), ex.toolCallsUsed(), ms);
         return new AgentResult(ex.executionId(), status, response,
                 ex.iteration(), ex.toolCallsUsed(), ms, failureCode, ex.observations());
+    }
+
+    /**
+     * Terminate a run because a guardrail requires confirmation (spec §11). Records the same lifecycle
+     * metrics as {@link #terminate} and carries the exact {@link PendingAction} out; the conversation
+     * layer binds it to a stored, fingerprint-bound confirmation. No tool has executed.
+     */
+    private AgentResult terminatePending(AgentExecution ex, PendingAction pending) {
+        long ms = ex.elapsedMillis(clock);
+        AgentStatus status = AgentStatus.PENDING_CONFIRMATION;
+        meters.timer("agent.execution.duration", "status", status.name()).record(Duration.ofMillis(ms));
+        meters.counter("agent.execution.count", "status", status.name()).increment();
+        meters.summary("agent.iterations").record(ex.iteration());
+        log.info("agent.run executionId={} status={} iterations={} toolCalls={} durationMs={} pendingTool={}",
+                ex.executionId(), status, ex.iteration(), ex.toolCallsUsed(), ms, pending.tool());
+        return new AgentResult(ex.executionId(), status, null,
+                ex.iteration(), ex.toolCallsUsed(), ms, "CONFIRMATION_REQUIRED", ex.observations(), pending);
     }
 
     private void limitMetric(String limit) {

@@ -14,8 +14,13 @@ cooperative iteration/tool-call budgets, one deadline, a cancellation seam, and 
 memory**: bounded per-user JSON-blob context under `conv:{userId}:{conversationId}` with a sliding 24h
 TTL, injected into a delimited `{history}` prompt slot — the orchestrator itself stays Redis-free.
 `POST /api/v1/agent/execute` takes an optional `conversationId` and returns `conversationId`/`memoryStatus`;
-`DELETE /api/v1/agent/conversations/{id}` deletes a conversation. **Hard** guardrails/confirmation/
-rate-limiting are **M8**; durable audit **M9** (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+`DELETE /api/v1/agent/conversations/{id}` deletes a conversation. As of **M8**, the
+`com.prince.agentic.guardrail` layer adds backend-authoritative enforcement: a `GuardrailEngine`
+(ordered risk/argument policies) gates every action before `ToolExecutor`; SIDE_EFFECTING/HIGH_RISK
+actions halt at `PENDING_CONFIRMATION` and run **exactly once** via a single-use, fingerprint-bound
+Redis confirmation (`POST`/`DELETE /api/v1/agent/confirmations/{id}`); a per-user fixed-window
+`RedisRateLimiter` caps tool calls; timeouts are layered and never force-cancel a write. Durable audit
+is **M9**; observability dashboards **M10** (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -114,7 +119,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Guardrails/confirmation/rate-limiting (M8), durable agent/tool audit (M9), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests.)
+Durable agent/tool audit (M9), observability dashboards (M10), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests. **M8 added no new dependencies** — guardrails/confirmation/rate-limiting reuse Spring, Jackson, the M7 Redis template, and `java.security.MessageDigest`.)
 
 ## Docker
 

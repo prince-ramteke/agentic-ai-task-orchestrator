@@ -1,5 +1,7 @@
 package com.prince.agentic.agent;
 
+import com.prince.agentic.guardrail.confirmation.ConfirmationService;
+import com.prince.agentic.guardrail.confirmation.PendingConfirmation;
 import com.prince.agentic.memory.ConversationMemory;
 import com.prince.agentic.memory.ConversationMemoryService;
 import com.prince.agentic.memory.MemoryMessage;
@@ -36,13 +38,15 @@ public class AgentConversationService {
 
     private final AgentOrchestrator orchestrator;
     private final ConversationMemoryService memory;
+    private final ConfirmationService confirmations;
     private final Clock clock;
     private final MeterRegistry meters;
 
     public AgentConversationService(AgentOrchestrator orchestrator, ConversationMemoryService memory,
-                                    Clock clock, MeterRegistry meters) {
+                                    ConfirmationService confirmations, Clock clock, MeterRegistry meters) {
         this.orchestrator = orchestrator;
         this.memory = memory;
+        this.confirmations = confirmations;
         this.clock = clock;
         this.meters = meters;
     }
@@ -57,18 +61,27 @@ public class AgentConversationService {
         String history = memory.renderContext(memoryState);
         AgentResult result = orchestrator.run(principal, message, history);
 
+        // M8: a halted side-effecting action is stored as a fingerprint-bound confirmation, keyed by
+        // the (verified) principal and THIS conversation id — never by any client/model claim.
+        PendingConfirmation pending = null;
+        if (result.status() == AgentStatus.PENDING_CONFIRMATION && result.pending() != null) {
+            pending = confirmations.create(principal, memoryState.conversationId(), result.pending());
+        }
+
+        // Persist the turn best-effort. On a pending turn nothing executed, so buildTurn appends only
+        // the user message — enough to keep the conversation id alive for a later, separate turn.
         List<MemoryMessage> turn = buildTurn(memoryState, message, result);
         try {
             memory.append(principal, memoryState, turn);
             meters.counter("agent.conversation", "memoryStatus", MemoryStatus.ACTIVE.name()).increment();
-            return new ConversationOutcome(result, memoryState.conversationId(), MemoryStatus.ACTIVE);
+            return new ConversationOutcome(result, memoryState.conversationId(), MemoryStatus.ACTIVE, pending);
         } catch (MemoryUnavailableException e) {
             // Best-effort persistence: the turn already executed. Degrade rather than fail after effects.
             log.warn("agent.conversation append unavailable (best-effort) new={} executionId={}",
                     isNew, result.executionId());
             meters.counter("agent.conversation", "memoryStatus", MemoryStatus.UNAVAILABLE.name()).increment();
             String outId = isNew ? null : memoryState.conversationId();
-            return new ConversationOutcome(result, outId, MemoryStatus.UNAVAILABLE);
+            return new ConversationOutcome(result, outId, MemoryStatus.UNAVAILABLE, pending);
         }
     }
 

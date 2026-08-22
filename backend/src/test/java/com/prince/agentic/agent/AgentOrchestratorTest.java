@@ -2,10 +2,14 @@ package com.prince.agentic.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prince.agentic.agent.support.ScriptedLlmClient;
+import com.prince.agentic.guardrail.GuardrailDecision;
+import com.prince.agentic.guardrail.GuardrailEngine;
+import com.prince.agentic.guardrail.RateLimiter;
 import com.prince.agentic.security.AuthenticatedUser;
 import com.prince.agentic.tool.ToolError;
 import com.prince.agentic.tool.ToolExecutor;
 import com.prince.agentic.tool.ToolResult;
+import com.prince.agentic.tool.ToolRiskLevel;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -33,16 +37,37 @@ class AgentOrchestratorTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-21T00:00:00Z"), ZoneOffset.UTC);
     private final AgentProperties props = new AgentProperties(8, 10, 60, 2, 2000, 20);
 
+    /**
+     * A guardrail engine mimicking the real risk policy for these mechanics tests: {@code task.create}
+     * is SIDE_EFFECTING → REQUIRE_CONFIRMATION; every other tool ALLOWs so the executor path (and its
+     * observation recovery) is still exercised. The real engine is unit-tested separately.
+     */
+    private GuardrailEngine riskEngine() {
+        return (principal, decision, ctx) -> "task.create".equals(decision.tool())
+                ? GuardrailDecision.requireConfirmation(ToolRiskLevel.SIDE_EFFECTING, "risk")
+                : GuardrailDecision.allow();
+    }
+
+    /** Rate limiter that always admits (rate-limit behaviour has its own test). */
+    private RateLimiter alwaysAllow() {
+        return userId -> true;
+    }
+
     private AgentOrchestrator orchestrator(ScriptedLlmClient llm, ToolExecutor executor, AgentToolCatalog catalog) {
         return orchestrator(llm, executor, catalog, props, clock);
     }
 
     private AgentOrchestrator orchestrator(ScriptedLlmClient llm, ToolExecutor executor, AgentToolCatalog catalog,
                                            AgentProperties p, Clock c) {
+        return orchestrator(llm, executor, catalog, p, c, riskEngine(), alwaysAllow());
+    }
+
+    private AgentOrchestrator orchestrator(ScriptedLlmClient llm, ToolExecutor executor, AgentToolCatalog catalog,
+                                           AgentProperties p, Clock c, GuardrailEngine engine, RateLimiter limiter) {
         ObjectMapper om = new ObjectMapper();
         AgentPlanner planner = new AgentPlanner(llm, new AgentPromptService(), new AgentDecisionValidator(), catalog);
         return new AgentOrchestrator(planner, executor, catalog,
-                new ObservationSerializer(om, p), p, c, new SimpleMeterRegistry(), om);
+                new ObservationSerializer(om, p), p, c, new SimpleMeterRegistry(), om, engine, limiter);
     }
 
     private AgentToolCatalog emptyCatalog() {
@@ -81,22 +106,19 @@ class AgentOrchestratorTest {
     }
 
     @Test
-    void multipleToolCalls_thenFinal() {
+    void multipleReadOnlyToolCalls_thenFinal() {
         ToolExecutor executor = mock(ToolExecutor.class);
         when(executor.execute(eq("task.search"), anyMap(), any()))
                 .thenReturn(ToolResult.ok("task.search", List.of("t1"), 3));
-        when(executor.execute(eq("task.create"), anyMap(), any()))
-                .thenReturn(ToolResult.ok("task.create", Map.of("id", 1), 4));
         AgentToolCatalog catalog = emptyCatalog();
         ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
                 new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of("priority", "HIGH")),
-                new AgentDecision(AgentAction.TOOL_CALL, null, "task.create", Map.of("title", "follow-up")),
+                new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of("priority", "LOW")),
                 new AgentDecision(AgentAction.FINAL, "done", null, null));
         AgentResult r = orchestrator(llm, executor, catalog).run(user, "do stuff");
         assertThat(r.status()).isEqualTo(AgentStatus.COMPLETED);
         assertThat(r.toolCalls()).isEqualTo(2);
-        verify(executor).execute(eq("task.search"), anyMap(), any());
-        verify(executor).execute(eq("task.create"), anyMap(), any());
+        verify(executor, times(2)).execute(eq("task.search"), anyMap(), any());
     }
 
     @Test
@@ -274,18 +296,49 @@ class AgentOrchestratorTest {
     }
 
     @Test
-    void sideEffectTool_isNotRetried_whenFollowUpDecisionInvalidThenRepairsToFinal() {
+    void sideEffectTool_haltsAtPendingConfirmation_withoutExecuting() {
         ToolExecutor executor = mock(ToolExecutor.class);
-        when(executor.execute(eq("task.create"), anyMap(), any()))
-                .thenReturn(ToolResult.ok("task.create", Map.of("id", 9), 5));
         AgentToolCatalog catalog = emptyCatalog();
         ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
                 new AgentDecision(AgentAction.TOOL_CALL, null, "task.create", Map.of("title", "x")),
-                new AgentDecision(AgentAction.FINAL, null, null, null),   // invalid -> repair
-                new AgentDecision(AgentAction.FINAL, "created", null, null));
+                new AgentDecision(AgentAction.FINAL, "should not be reached", null, null));
         AgentResult r = orchestrator(llm, executor, catalog).run(user, "create a task");
-        assertThat(r.status()).isEqualTo(AgentStatus.COMPLETED);
-        verify(executor, times(1)).execute(eq("task.create"), anyMap(), any()); // executed exactly once
+        assertThat(r.status()).isEqualTo(AgentStatus.PENDING_CONFIRMATION);
+        assertThat(r.failureCode()).isEqualTo("CONFIRMATION_REQUIRED");
+        assertThat(r.toolCalls()).isZero();
+        assertThat(r.pending()).isNotNull();
+        assertThat(r.pending().tool()).isEqualTo("task.create");
+        assertThat(r.pending().riskLevel()).isEqualTo(ToolRiskLevel.SIDE_EFFECTING);
+        assertThat(r.pending().arguments()).containsEntry("title", "x");
+        verifyNoInteractions(executor); // guardrail halts BEFORE any effect
+    }
+
+    @Test
+    void guardrailDeny_returnsBlocked_withoutExecuting() {
+        ToolExecutor executor = mock(ToolExecutor.class);
+        AgentToolCatalog catalog = emptyCatalog();
+        GuardrailEngine deny = (p, d, ctx) -> GuardrailDecision.deny("UNSAFE_ACTION", "no", "arg-safety");
+        ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
+                new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of("p", "x")));
+        AgentResult r = orchestrator(llm, executor, catalog, props, clock, deny, alwaysAllow())
+                .run(user, "x");
+        assertThat(r.status()).isEqualTo(AgentStatus.BLOCKED);
+        assertThat(r.failureCode()).isEqualTo("UNSAFE_ACTION");
+        verifyNoInteractions(executor);
+    }
+
+    @Test
+    void rateLimitExceeded_returnsBlocked_withoutExecuting() {
+        ToolExecutor executor = mock(ToolExecutor.class);
+        AgentToolCatalog catalog = emptyCatalog();
+        RateLimiter denyAll = userId -> false;
+        ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
+                new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of("p", "x")));
+        AgentResult r = orchestrator(llm, executor, catalog, props, clock, riskEngine(), denyAll)
+                .run(user, "x");
+        assertThat(r.status()).isEqualTo(AgentStatus.BLOCKED);
+        assertThat(r.failureCode()).isEqualTo("RATE_LIMITED");
+        verifyNoInteractions(executor);
     }
 
     /** Returns {@code start} on its first call (used by AgentExecution to compute the deadline),

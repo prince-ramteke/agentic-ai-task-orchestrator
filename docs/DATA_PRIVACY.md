@@ -75,3 +75,13 @@ Assert that no secret/PII appears in logs, audit records, or outbound requests; 
   durable record — losing it loses only convenience (durable audit is the separate M9 concern).
 - **Logging:** conversation content is never logged; metrics carry only counts/sizes and status, never
   raw text or ids.
+
+## Milestone 8 — Confirmation & guardrail data (IMPLEMENTED)
+
+Confirmation records (`guard:confirmation:{id}`) store the minimum needed to execute the approved
+action: owner userId, conversationId, tool name, the validated arguments, riskLevel, and the integrity
+fingerprint — as a plain application-owned JSON blob, TTL'd (default 300s), never containing tokens,
+secrets, or security context. Client-facing responses expose only a safe confirmation view
+(confirmationId, tool, riskLevel, summary, expiresAt) — never internal class names, fingerprints, raw
+arguments, or prompt content. Guardrail metrics/logs carry no raw arguments or user text. See
+`GUARDRAILS.md`, ADR-0024.

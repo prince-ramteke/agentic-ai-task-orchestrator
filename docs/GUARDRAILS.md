@@ -1,7 +1,18 @@
 # Guardrails
 ## Agentic AI Task Orchestrator
 
-> Conceptual. Guardrails are planned (M8). None are implemented yet. Bounds are enforced by code, never by trusting the model.
+> **Milestone 8 — IMPLEMENTED.** The guardrail enforcement layer is now real: a backend-authoritative
+> `GuardrailEngine` (ordered pure policies, first-non-ALLOW-wins) evaluates every proposed tool action
+> before any effect; SIDE_EFFECTING/HIGH_RISK actions require explicit, single-use, fingerprint-bound
+> confirmation (Redis `guard:confirmation:{id}`, TTL `AGENT_CONFIRMATION_TTL_SECONDS`); a per-user
+> fixed-window rate limit (`guard:rate:{userId}:{epochMinute}`, `AGENT_USER_TOOL_BUDGET_PER_MIN`) caps
+> tool calls; timeouts are layered (no forced cancel of writes). See ADR-0021…0025 and
+> `docs/superpowers/specs/2026-08-22-m8-guardrails-design.md`. **M9 (durable audit)** and
+> **M10 (observability dashboards)** remain PLANNED. M8 does **not** claim to solve prompt injection —
+> its defense is structural (typed decisions, tool allowlist, backend identity, authorization,
+> confirmation, bounded execution), not content heuristics.
+
+> Bounds are enforced by code, never by trusting the model.
 
 > **Milestone 5 note (hooks in place, enforcement deferred):** the M5 tool framework provides the
 > metadata M8 will enforce: every `ToolDescriptor` carries a `ToolRiskLevel`
@@ -25,7 +36,9 @@ The model is an untrusted planner. Guardrails are the deterministic bounds that 
 
 ## 2. The guardrail set
 
-Legend: **[M6]** cooperative, checked between steps (implemented now); **[M8]** hard enforcement (planned).
+Legend: **[M6]** cooperative, checked between steps; **[M8]** guardrail enforcement — **now IMPLEMENTED**
+(confirmation, rate limiting, argument-safety policy, layered timeouts). Timeout enforcement is layered
+and never force-cancels an in-flight write (ADR-0023).
 
 | Guardrail | Rule | Default (env) | On breach |
 |---|---|---|---|
@@ -55,11 +68,22 @@ Failures are **explicit, bounded, and observable** — never silent:
 
 Guardrails wrap the decision loop (`AGENT_ARCHITECTURE.md` §3). Before each step: check remaining budget, timeout, and loop state. Around each tool: enforce validation, authorization, confirmation, timeout, and retry. After each step: decrement budget, record audit, update execution state in Redis.
 
-## 5. Confirmation flow (planned)
+## 5. Confirmation flow (M8 — IMPLEMENTED)
 
-1. Agent proposes a high-risk tool.
-2. Guardrail intercepts; instead of executing, the run returns a **confirmation request** describing the exact action and target.
-3. Execution resumes only on explicit user confirmation, re-validating authorization at execution time (not just at proposal time).
+1. The agent proposes a SIDE_EFFECTING/HIGH_RISK tool.
+2. `GuardrailEngine` (in the orchestrator loop, before `ToolExecutor`) returns `REQUIRE_CONFIRMATION`;
+   the run **halts** at `PENDING_CONFIRMATION`. The exact proposed action is stored as a
+   fingerprint-bound (`SHA-256` over `userId`+`conversationId`+`toolName`+canonical args+`riskLevel`),
+   single-use, TTL'd `guard:confirmation:{id}` record in Redis. **No tool has executed.**
+3. `POST /api/v1/agent/confirmations/{id}` (no argument body) atomically consumes the record
+   (`GETDEL`), re-runs the **exact stored action** through the normal `ToolExecutor` gates
+   (authorization re-checked at execution time), and returns the result. **No automatic LLM-loop
+   resume** — a later user turn continues the conversation separately.
+4. Replay, argument mutation, cross-user use, cross-conversation use, expiry, and record tampering are
+   all rejected with stable codes (`CONFIRMATION_NOT_FOUND/EXPIRED/MISMATCH/ALREADY_USED`); the action
+   executes **at most once**. `DELETE /confirmations/{id}` cancels a pending confirmation.
+
+See ADR-0022 and ADR-0024.
 
 ## 6. Testing
 

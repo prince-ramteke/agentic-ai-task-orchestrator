@@ -67,12 +67,17 @@ Related ADRs, docs, issues.
 | ADR-0018 | Memory retention & bounding strategy | M7 | Accepted |
 | ADR-0019 | Redis failure semantics | M7 | Accepted |
 | ADR-0020 | Conversation ownership & isolation | M7 | Accepted |
+| ADR-0021 | Guardrail policy engine | M8 | Accepted |
+| ADR-0022 | Side-effect confirmation model | M8 | Accepted |
+| ADR-0023 | Layered timeout strategy | M8 | Accepted |
+| ADR-0024 | Confirmation integrity / action fingerprinting | M8 | Accepted |
+| ADR-0025 | Per-user fixed-window rate limiting | M8 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Confirmation policy for dangerous operations | M8 |
+| Durable audit persistence (agent/tool execution records) | M9 |
 
-These are *planned topics*, not decisions. A new ADR file gets the next free number (ADR-0009, …)
+These are *planned topics*, not decisions. A new ADR file gets the next free number
 when the decision is made; existing numbers are never renumbered or reused.

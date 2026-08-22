@@ -178,3 +178,17 @@ Redis conversation memory preserves every M2–M6 boundary and adds its own (ADR
   Memory poisoning is bounded here and remains a guardrail concern for M8.
 - **No secrets in memory:** never JWTs, security context, or raw entities. No debug/get-key endpoint;
   no conversation-listing endpoint. Raw conversation content is never logged. `REDIS_PASSWORD` in non-dev.
+
+## Milestone 8 — Guardrails & confirmation (IMPLEMENTED)
+
+M8 adds a backend-authoritative `GuardrailEngine` between the validated `AgentDecision` and
+`ToolExecutor` (ALLOW / DENY / REQUIRE_CONFIRMATION). Tool **risk is read from the descriptor** — the
+model can never downgrade it. SIDE_EFFECTING/HIGH_RISK actions require an explicit, **single-use,
+owner-scoped, fingerprint-bound** confirmation (SHA-256 over userId+conversationId+toolName+canonical
+args+riskLevel; Redis `guard:confirmation:{id}`, atomic `GETDEL`, TTL). Confirmation authorizes intent
+and **never bypasses authorization** — the confirmed action re-runs every M5 gate (auth, ownership,
+validation). A per-user fixed-window rate limit caps tool calls. Replay, argument mutation, cross-user
+use, cross-conversation use, expiry, and record tampering are all rejected with stable codes. M8 does
+**not** claim to solve prompt injection: the boundary is structural (typed decisions, tool allowlist,
+verified identity, authorization, confirmation, bounded execution), not content heuristics. See
+ADR-0021…0025 and `GUARDRAILS.md`.

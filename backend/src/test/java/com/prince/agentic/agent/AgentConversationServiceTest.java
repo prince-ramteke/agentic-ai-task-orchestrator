@@ -3,9 +3,13 @@ package com.prince.agentic.agent;
 import com.prince.agentic.memory.ConversationMemory;
 import com.prince.agentic.memory.MemoryMessage;
 import com.prince.agentic.memory.MemoryRole;
+import com.prince.agentic.guardrail.confirmation.ConfirmationService;
+import com.prince.agentic.guardrail.confirmation.PendingAction;
+import com.prince.agentic.guardrail.confirmation.PendingConfirmation;
 import com.prince.agentic.memory.exception.MemoryUnavailableException;
 import com.prince.agentic.memory.support.FakeConversationMemoryService;
 import com.prince.agentic.security.AuthenticatedUser;
+import com.prince.agentic.tool.ToolRiskLevel;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,7 @@ class AgentConversationServiceTest {
 
     private AgentOrchestrator orchestrator;
     private FakeConversationMemoryService memory;
+    private ConfirmationService confirmations;
     private AgentConversationService service;
 
     private AgentResult result(String response, List<AgentObservation> obs) {
@@ -42,9 +47,34 @@ class AgentConversationServiceTest {
     @BeforeEach
     void setUp() {
         orchestrator = mock(AgentOrchestrator.class);
+        confirmations = mock(ConfirmationService.class);
         memory = new FakeConversationMemoryService(Clock.fixed(NOW, ZoneOffset.UTC));
-        service = new AgentConversationService(orchestrator, memory,
+        service = new AgentConversationService(orchestrator, memory, confirmations,
                 Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry());
+    }
+
+    @Test
+    void pendingConfirmation_createsFingerprintBoundConfirmation_forThisConversation() {
+        PendingAction pending = new PendingAction("task.create",
+                java.util.Map.of("title", "review the report"), ToolRiskLevel.SIDE_EFFECTING);
+        AgentResult pendingResult = new AgentResult("exec-9", AgentStatus.PENDING_CONFIRMATION, null,
+                1, 0, 3L, "CONFIRMATION_REQUIRED", List.of(), pending);
+        when(orchestrator.run(eq(USER), eq("create a task"), anyString())).thenReturn(pendingResult);
+        PendingConfirmation created = new PendingConfirmation("conf-1", "task.create",
+                ToolRiskLevel.SIDE_EFFECTING, "Run tool 'task.create' (SIDE_EFFECTING).", NOW.plusSeconds(300));
+        when(confirmations.create(eq(USER), anyString(), eq(pending))).thenReturn(created);
+
+        ConversationOutcome outcome = service.execute(USER, "create a task", null);
+
+        assertThat(outcome.result().status()).isEqualTo(AgentStatus.PENDING_CONFIRMATION);
+        assertThat(outcome.pendingConfirmation()).isNotNull();
+        assertThat(outcome.pendingConfirmation().confirmationId()).isEqualTo("conf-1");
+        // The confirmation is bound to the server-minted conversation id (never a client claim).
+        org.mockito.Mockito.verify(confirmations)
+                .create(eq(USER), eq(outcome.conversationId()), eq(pending));
+        // The user message is persisted so the conversation can be continued after confirming.
+        ConversationMemory stored = memory.startOrLoad(USER, outcome.conversationId());
+        assertThat(stored.messages()).extracting(MemoryMessage::role).containsExactly(MemoryRole.USER);
     }
 
     @Test

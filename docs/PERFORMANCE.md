@@ -72,3 +72,12 @@ An agent run is inherently slower than a plain endpoint (multiple LLM round-trip
 - Memory work happens **outside** the M6 loop and never spans a DB transaction (load → run → append).
 - `memory.load`/`memory.append` timers are exposed; no performance numbers are claimed here beyond the
   Testcontainers-verified functional behavior.
+
+## Milestone 8 — Layered timeouts, no forced cancellation (IMPLEMENTED)
+
+Timeout enforcement is layered and never force-cancels an in-flight write (ADR-0023): (1) the
+LLM-provider call timeout; (2) the M6 cooperative wall-clock deadline checked between steps; (3) a
+per-tool pre-execution budget check that fails **before** starting work that cannot be safely
+interrupted. `Future.cancel(true)` around a transactional/SIDE_EFFECTING operation is explicitly
+rejected. Confirmation and rate-limit state use single, TTL'd Redis keys (`GETDEL` / `INCR`) — no
+distributed lock, no extra round-trips beyond one per gate.

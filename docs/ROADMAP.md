@@ -15,7 +15,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 5 | Tool Registry | ✅ |
 | 6 | Agent Orchestration | ⬜ |
 | 7 | Memory | ⬜ |
-| 8 | Guardrails | ⬜ |
+| 8 | Guardrails | ✅ |
 | 9 | Auditing | ⬜ |
 | 10 | Observability | ⬜ |
 | 11 | Testing & Evaluation | ⬜ |
@@ -95,13 +95,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs updated:** `MEMORY.md`, `AGENT_ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `TESTING.md`, `DEPLOYMENT.md`, `TECH_STACK.md`, `GUARDRAILS.md`, `AUDIT_LOGGING.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `.env.example`.
 - **Deferred:** session/execution-state + cache Redis rows, hard guardrails/confirmation/rate-limiting (M8), durable agent audit (M9), semantic/vector memory & RAG.
 
-### Milestone 8 — Guardrails ⬜
-- **Objective:** Bounded, safe execution — max tool calls, timeout, retry limit, loop detection, confirmation for dangerous ops, output validation, rate limiting, cancellation.
-- **Prerequisites:** M6.
-- **Outputs:** guardrail enforcement in the orchestrator; confirmation flow; high-risk `deleteTask` gated; configurable bounds via env.
-- **Validation:** tests for each bound tripping; confirmation required before dangerous ops; loop detection triggers.
-- **Docs:** `GUARDRAILS.md`, `THREAT_MODEL.md`, `CHANGELOG.md`.
-- **DoD:** no unbounded execution path exists.
+### Milestone 8 — Guardrails ✅
+- **Objective:** Backend-authoritative safety enforcement on top of the M5 risk metadata and M6 bounds — a centralized guardrail engine that evaluates every proposed action before execution and prevents unsafe behavior even when the LLM requests it.
+- **Prerequisites:** M6, M7.
+- **Delivered (IMPLEMENTED + VERIFIED 2026-08-22):** `com.prince.agentic.guardrail` package — `GuardrailEngine` (ordered `RiskPolicy`/`ArgumentSafetyPolicy`, first-non-ALLOW-wins, descriptor-authoritative risk); `GuardrailDecision` (ALLOW/DENY/REQUIRE_CONFIRMATION); `FingerprintService` (SHA-256 over the 5 bound fields); Redis-backed single-use `RedisConfirmationService` (`guard:confirmation:{id}`, `GETDEL`, TTL); per-user `RedisRateLimiter` (`guard:rate:{userId}:{epochMinute}`); `RateLimitedException` + confirmation exceptions mapped via `GlobalExceptionHandler`. Orchestrator gates before `ToolExecutor` (new `PENDING_CONFIRMATION`/`BLOCKED` terminals); `AgentConfirmationService` executes the exact stored action exactly once; `POST/DELETE /api/v1/agent/confirmations/{id}`; layered timeouts (no forced cancel of writes); `guardrail.*` metrics.
+- **Validation (VERIFIED 2026-08-22):** unit + integration suite green (`./mvnw verify`); `AgentGuardrailConfirmationIT` proves execute → PENDING_CONFIRMATION → confirm → PostgreSQL creates the task **exactly once**, replay creates none, cross-user confirm masked 404; `RedisConfirmationServiceTest`/`RedisRateLimiterIT` cover replay/mutation/expiry/isolation; prompt/memory-safety tests prove text cannot change risk/role/identity. JaCoCo gate (≥0.75) held.
+- **Boundary:** durable audit is **M9 (PLANNED)**; observability dashboards are **M10 (PLANNED)**. M8 does not claim to solve all prompt injection.
+- **Docs:** `GUARDRAILS.md`, `SECURITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `MEMORY.md`, `OBSERVABILITY.md`, `API.md`, `PERFORMANCE.md`, `DATA_PRIVACY.md`, `TESTING.md`, `TECH_STACK.md`, `CHANGELOG.md`, ADR-0021…0025.
+- **DoD:** no unbounded execution path; no effect before guardrail evaluation; confirmation single-use and fingerprint-bound.
 
 ### Milestone 9 — Auditing ⬜
 - **Objective:** Durable, queryable audit trail of agent decisions, tool executions, side effects, and confirmations.

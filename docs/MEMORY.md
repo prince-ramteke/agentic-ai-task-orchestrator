@@ -87,3 +87,11 @@ receives history as an opaque string in a delimited `{history}` prompt slot.
 still returned as `UNAVAILABLE`.
 
 **Not M7:** durable agent audit (M9), exec/session/cache rows (above), semantic/vector memory, RAG.
+
+## Milestone 8 — Memory is untrusted context; confirmation state is separate (IMPLEMENTED)
+
+M8 treats conversation memory strictly as `UNTRUSTED_CONTEXT`, never as policy: stored user/tool text
+cannot change a tool's risk, the confirmation requirement, a role, or identity (proven by tests).
+Confirmation state is stored in its **own** Redis namespace `guard:confirmation:{id}` (TTL
+`AGENT_CONFIRMATION_TTL_SECONDS`) and the per-user rate window under `guard:rate:{userId}:{epochMinute}`
+— never mixed with the `conv:{userId}:{conversationId}` memory blob. See `GUARDRAILS.md`, ADR-0024.

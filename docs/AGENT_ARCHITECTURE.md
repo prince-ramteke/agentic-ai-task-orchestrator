@@ -117,3 +117,13 @@ Every run carries a budget: max tool calls, wall-clock timeout, retry limit, and
 ## 8. Why this design
 
 It isolates the untrusted part (model reasoning) behind deterministic, testable, authorized, audited gates — so correctness and security never depend on the model behaving. It is also evaluable: because tools and decisions are explicit, agent behavior can be scored against a dataset (`EVALUATION.md`).
+
+## Milestone 8 — Guardrail gate in the loop (IMPLEMENTED)
+
+The bounded loop now evaluates every proposed tool action through the `GuardrailEngine` **after** M6's
+tool-call and loop-detection checks and **before** `ToolExecutor`: DENY → terminal `BLOCKED`;
+REQUIRE_CONFIRMATION → terminal `PENDING_CONFIRMATION` (carries the exact `PendingAction`); ALLOW →
+per-user rate-limit → execute. On confirmation, `AgentConfirmationService` executes the exact stored
+action **exactly once** through the same `ToolExecutor` gates, with **no automatic LLM-loop resume**.
+The orchestrator stays Redis-free and repository-free, depending only on the `GuardrailEngine` /
+`RateLimiter` abstractions. See ADR-0021/0022, `GUARDRAILS.md`.

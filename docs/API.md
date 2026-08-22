@@ -164,11 +164,13 @@ tool exception ever reaches HTTP): `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` 
 `TOOL_UNAUTHORIZED` (401), `TOOL_FORBIDDEN` (403), `TOOL_TIMEOUT` (504, reserved for M8),
 `TOOL_EXECUTION_FAILED` (500). A domain error (e.g. `NOT_FOUND`) is preserved with its own code.
 
-### Agent endpoint (M6 + M7 memory) — VERIFIED
+### Agent endpoint (M6 + M7 memory + M8 guardrails) — VERIFIED
 
 | Method | Path | Auth | Success | Notes |
 |---|---|---|---|---|
 | POST | `/api/v1/agent/execute` | **authenticated** | 200 | Run one bounded agent execution; optionally continue a conversation |
+| POST | `/api/v1/agent/confirmations/{id}` | **authenticated** | 200 | Confirm & execute a pending side-effecting action **exactly once** (no request body) |
+| DELETE | `/api/v1/agent/confirmations/{id}` | **authenticated** | 204 | Cancel a pending confirmation (404-masked) |
 | DELETE | `/api/v1/agent/conversations/{id}` | **authenticated** | 204 | Delete the caller's conversation memory (404-masked) |
 
 Request: `{ "message": "Show me my high-priority tasks", "conversationId"?: "<uuid>" }` — `message` is
@@ -177,8 +179,23 @@ Request: `{ "message": "Show me my high-priority tasks", "conversationId"?: "<uu
 
 Response (200): `{ "executionId", "status", "response", "iterations", "toolCalls", "durationMs",
 "failureCode", "conversationId", "memoryStatus" }` where `status ∈ COMPLETED | FAILED | TIMED_OUT |
-CANCELLED | LIMIT_REACHED | LOOP_DETECTED` and `failureCode` is present (non-null) only for
-non-`COMPLETED` runs.
+CANCELLED | LIMIT_REACHED | LOOP_DETECTED | PENDING_CONFIRMATION | BLOCKED` and `failureCode` is
+present (non-null) only for non-`COMPLETED` runs.
+
+**M8 guardrails (additive, non-breaking — existing fields unchanged; `NON_NULL`-omitted otherwise):**
+- `status = PENDING_CONFIRMATION` — a SIDE_EFFECTING/HIGH_RISK action was proposed and **halted before
+  any effect**. The response adds `confirmationId`, `confirmationTool`, `confirmationRiskLevel`,
+  `confirmationSummary`, `confirmationExpiresAt`. Confirm it (exact stored action, single-use) via
+  `POST /api/v1/agent/confirmations/{id}` — **no request body**; the stored action is what runs, so
+  argument mutation is structurally impossible. Confirm response: `{ "confirmationId", "tool",
+  "status" (EXECUTED|FAILED), "resultSummary", "errorCode"? }`.
+- `status = BLOCKED` — a guardrail denied the action or the per-user tool-call rate limit tripped;
+  `failureCode ∈ UNSAFE_ACTION | POLICY_VIOLATION | RATE_LIMITED`.
+- **Confirmation errors** (on the confirm endpoint, standard `ApiError` envelope): `404
+  CONFIRMATION_NOT_FOUND` (missing/foreign/consumed, masked), `410 CONFIRMATION_EXPIRED`, `409
+  CONFIRMATION_MISMATCH` / `CONFIRMATION_ALREADY_USED`, `429 RATE_LIMITED`. Identity comes only from the
+  authenticated principal; confirmations are owner-scoped and fingerprint-bound. See ADR-0021…0025,
+  `GUARDRAILS.md`.
 
 **M7 memory (additive, non-breaking — existing M6 fields unchanged):**
 - `conversationId` — the **server-minted UUID** to continue this conversation on the next call; `null`

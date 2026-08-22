@@ -90,3 +90,12 @@ Lightweight Micrometer metrics for Redis conversation memory (no raw content or 
 `agent.conversation` (counter tagged `memoryStatus` = ACTIVE/UNAVAILABLE). Conversation content is
 never logged. Spring Boot's default Redis health indicator is kept, so a Redis outage is visible on
 `/actuator/health`.
+
+## Milestone 8 — Guardrail metrics (IMPLEMENTED)
+
+Micrometer counters (low-cardinality labels only — `tool`, `riskLevel`, `policyOutcome`; never userId,
+conversationId, arguments, or prompt text): `guardrail.allow`, `guardrail.deny`,
+`guardrail.confirmation_required`, `guardrail.confirmation_approved`, `guardrail.confirmation_expired`,
+`guardrail.rate_limited`, `guardrail.policy_violation`. Guardrail decisions are logged with
+execution/request ids; arguments are never logged raw. Durable audit records remain **M9 (PLANNED)**;
+dashboards remain **M10 (PLANNED)**.

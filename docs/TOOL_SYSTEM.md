@@ -129,3 +129,12 @@ M5; hard cancellation is M8. An ADMIN-only, read-only `GET /api/v1/tools` return
 ## Milestone 6 — Agent tool catalog & side-effect note
 
 M6 adds `AgentToolCatalog`, an agent-owned adapter that derives a model-readable catalog **reflectively from `ToolRegistry.descriptors()`** (name, description, category, risk, input field names/types + enum values) — the registry stays the single source of truth; M5 gains no agent or Spring AI dependency. Every agent tool call still goes through `ToolExecutor` (resolve → role authz → bind → validate → execute → wrap). **Side-effecting tools are not automatically idempotent and are never auto-retried by the orchestrator**; the exact M5 `ToolResult` is preserved as the observation. The human-confirmation workflow for side-effecting/irreversible tools arrives in M8.
+
+## Milestone 8 — Guardrail enforcement of tool risk (IMPLEMENTED)
+
+The `ToolRiskLevel` metadata M5 defined is now enforced by the M8 `GuardrailEngine`, evaluated in the
+orchestrator **before** `ToolExecutor`: READ_ONLY/DETERMINISTIC → ALLOW; SIDE_EFFECTING/HIGH_RISK →
+REQUIRE_CONFIRMATION (halt, then execute the exact stored action exactly once on confirmation). The
+guardrail layer **adds policy only** — it does not duplicate M5 resolution, authentication, DTO
+binding, Bean Validation, or ownership authorization, which still run exactly once inside
+`ToolExecutor`. A confirmed action goes through those same gates. See `GUARDRAILS.md`, ADR-0021/0022.

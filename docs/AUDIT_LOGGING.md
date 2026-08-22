@@ -62,3 +62,10 @@ Redis conversation **memory** (M7) is short-lived context for future model reaso
 and is best-effort. Durable agent **audit** — a permanent, queryable record of what actually happened —
 is the separate **M9 (PLANNED)** concern backed by PostgreSQL. Do not treat memory as audit: memory may
 vanish on expiry or a Redis outage without any correctness impact.
+
+## Milestone 8 — Logging now; durable audit still M9 (PLANNED)
+
+M8 emits structured guardrail logs (decision, reasonCode, policyId, execution/request ids; arguments
+redacted) and low-cardinality guardrail metrics, and keeps short-lived confirmation/rate state in Redis
+with TTLs. M8 deliberately creates **no durable audit tables** (`agent_executions`, `tool_executions`,
+`agent_steps`) — persistent, queryable audit records remain **M9 (PLANNED)**.

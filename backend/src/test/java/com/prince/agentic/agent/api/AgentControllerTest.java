@@ -1,12 +1,18 @@
 package com.prince.agentic.agent.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.prince.agentic.agent.AgentConfirmationOutcome;
+import com.prince.agentic.agent.AgentConfirmationService;
 import com.prince.agentic.agent.AgentConversationService;
 import com.prince.agentic.agent.AgentResult;
 import com.prince.agentic.agent.AgentStatus;
 import com.prince.agentic.agent.ConversationOutcome;
 import com.prince.agentic.agent.MemoryStatus;
+import com.prince.agentic.guardrail.confirmation.PendingAction;
+import com.prince.agentic.guardrail.confirmation.PendingConfirmation;
+import com.prince.agentic.guardrail.exception.ConfirmationNotFoundException;
 import com.prince.agentic.memory.exception.ConversationNotFoundException;
+import com.prince.agentic.tool.ToolRiskLevel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -43,6 +49,7 @@ class AgentControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private AgentConversationService conversationService;
+    @MockitoBean private AgentConfirmationService confirmationService;
 
     private static final String PW = "SecurePassword123!";
     private static final String A_UUID = "11111111-1111-1111-1111-111111111111";
@@ -74,6 +81,66 @@ class AgentControllerTest {
                 .andExpect(jsonPath("$.toolCalls").value(1))
                 .andExpect(jsonPath("$.conversationId").value(A_UUID))
                 .andExpect(jsonPath("$.memoryStatus").value("ACTIVE"));
+    }
+
+    @Test
+    void execute_pendingConfirmation_exposesSafeConfirmationFields() throws Exception {
+        String token = registerAndLogin("agent-pending@example.com");
+        AgentResult pending = new AgentResult("exec-2", AgentStatus.PENDING_CONFIRMATION, null, 1, 0,
+                3L, "CONFIRMATION_REQUIRED", List.of(),
+                new PendingAction("task.create", java.util.Map.of("title", "x"), ToolRiskLevel.SIDE_EFFECTING));
+        PendingConfirmation pc = new PendingConfirmation("conf-1", "task.create",
+                ToolRiskLevel.SIDE_EFFECTING, "Run tool 'task.create' (SIDE_EFFECTING).",
+                java.time.Instant.parse("2026-08-22T12:05:00Z"));
+        when(conversationService.execute(any(), any(), any()))
+                .thenReturn(new ConversationOutcome(pending, A_UUID, MemoryStatus.ACTIVE, pc));
+
+        mockMvc.perform(post("/api/v1/agent/execute").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"message\":\"create a task\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING_CONFIRMATION"))
+                .andExpect(jsonPath("$.confirmationId").value("conf-1"))
+                .andExpect(jsonPath("$.confirmationTool").value("task.create"))
+                .andExpect(jsonPath("$.confirmationRiskLevel").value("SIDE_EFFECTING"))
+                .andExpect(jsonPath("$.confirmationSummary").exists());
+    }
+
+    @Test
+    void confirm_returns200_withExecutionSummary() throws Exception {
+        String token = registerAndLogin("agent-confirm@example.com");
+        when(confirmationService.confirm(any(), any()))
+                .thenReturn(new AgentConfirmationOutcome("conf-1", "task.create", true, "{\"id\":42}", null));
+
+        mockMvc.perform(post("/api/v1/agent/confirmations/conf-1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EXECUTED"))
+                .andExpect(jsonPath("$.tool").value("task.create"));
+    }
+
+    @Test
+    void confirm_missing_returns404_masked() throws Exception {
+        String token = registerAndLogin("agent-confirm404@example.com");
+        when(confirmationService.confirm(any(), any())).thenThrow(new ConfirmationNotFoundException());
+
+        mockMvc.perform(post("/api/v1/agent/confirmations/conf-x")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("CONFIRMATION_NOT_FOUND"));
+    }
+
+    @Test
+    void confirm_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/api/v1/agent/confirmations/conf-1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelConfirmation_returns204() throws Exception {
+        String token = registerAndLogin("agent-cancel@example.com");
+        mockMvc.perform(delete("/api/v1/agent/confirmations/conf-1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNoContent());
     }
 
     @Test
