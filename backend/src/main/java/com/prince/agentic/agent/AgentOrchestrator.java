@@ -16,6 +16,7 @@ import com.prince.agentic.tool.ToolResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -102,6 +103,12 @@ public class AgentOrchestrator {
         audit.started(executionId, principal.userId(), conversationId, requestId, ex.startedAt());
         int seq = 0;
 
+        // M10 (ADR-0030): push the executionId onto SLF4J MDC so every log line inside the loop
+        // is correlated with the audit row. Save the prior value so nested runs on the same thread
+        // (extremely rare, but possible via test wiring) restore what was there. Always cleared in
+        // the outer finally — no id leaks across pool-reused threads.
+        String priorExecutionMdc = MDC.get(MDC_EXECUTION_ID);
+        MDC.put(MDC_EXECUTION_ID, executionId);
         try {
             while (true) {
                 if (external.isCancelled()) {
@@ -209,8 +216,17 @@ public class AgentOrchestrator {
         } catch (RuntimeException unexpected) {
             log.warn("agent.run unexpected failure executionId={}", executionId, unexpected);
             return terminate(ex, AgentStatus.FAILED, "AGENT_EXECUTION_FAILED", null);
+        } finally {
+            if (priorExecutionMdc == null) {
+                MDC.remove(MDC_EXECUTION_ID);
+            } else {
+                MDC.put(MDC_EXECUTION_ID, priorExecutionMdc);
+            }
         }
     }
+
+    /** SLF4J MDC key correlating log lines to an agent execution. See ADR-0030. */
+    static final String MDC_EXECUTION_ID = "executionId";
 
     private AgentResult terminate(AgentExecution ex, AgentStatus status, String failureCode, String response) {
         long ms = ex.elapsedMillis(clock);

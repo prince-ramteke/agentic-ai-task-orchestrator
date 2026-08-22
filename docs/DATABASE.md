@@ -124,3 +124,13 @@ Durable → Postgres (this doc). Ephemeral conversation/session/execution *worki
 ## 8. Audit as first-class data
 
 `agent_executions`, `tool_executions`, and `audit_events` are core domain tables, not an afterthought — they make the agent auditable and evaluable (`AUDIT_LOGGING.md`, `EVALUATION.md`).
+
+## 9. Retention enforcement (M10 — IMPLEMENTED)
+
+`agent_executions` (and, via existing `ON DELETE CASCADE`, `agent_steps` + `tool_executions`) are
+purged nightly by the `AuditRetentionJob` — see `AUDIT_LOGGING.md` and ADR-0031. Cutoff column is
+`started_at` (NOT NULL, indexed via `idx_agent_exec_owner_started`); rows with
+`started_at < now(UTC) - retentionDays` are deleted parent-first in batches of
+`AGENT_AUDIT_PURGE_BATCH_SIZE` (default 500), capped at `AGENT_AUDIT_PURGE_MAX_BATCHES` per
+invocation. No new migration was needed — the `V5` schema already declared the cascades that make
+the parent-first purge safe and portable.

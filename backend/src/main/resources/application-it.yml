@@ -24,6 +24,9 @@ security:
   cors:
     allowed-origins: http://localhost:5173
 
+# M10: the AuditRetentionJob stays enabled in the `it` profile (matches production behaviour). The
+# scheduled cron path (03:15 UTC nightly) will not fire during a short test run, and integration
+# tests invoke AuditRetentionJob.runOnce() directly for determinism (see AuditRetentionIT).
 logging:
   level:
     root: WARN

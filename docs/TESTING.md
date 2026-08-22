@@ -150,3 +150,25 @@ Three levels, all deterministic and offline (`./mvnw verify` needs **no** live O
 - **Security:** `AgentAuditControllerTest` + `AgentAuditE2EIT` assert owner isolation and that no raw
   prompt/argument/output/chain-of-thought/secret is stored or returned. Coverage gate ≥0.75 held;
   live-Ollama tests stay profile-gated.
+
+## Milestone 10 — Observability & retention tests (IMPLEMENTED)
+
+- **Unit:** `RequestIdFilterTest` (UUID validation, MDC set/clear, junk header replaced, MDC
+  cleared even on downstream throw); `AuditRetentionPropertiesTest` (defaults, blank-cron
+  normalization); `AuditRetentionJobTest` (disabled flag → noop, loop until zero, `maxBatches`
+  cap, best-effort batch failure short-circuits without rethrow, `ReentrantLock.tryLock()`
+  overlap-skip proven with a blocking anonymous repo).
+- **App-context (`test` profile, MockMvc):** `ObservabilityEndpointsTest` — `/actuator/prometheus`
+  is anonymously reachable and returns Micrometer text output (`jvm_*`); `X-Request-Id` is minted
+  when missing, echoed exactly for a valid UUID, and replaced for junk. Readiness/liveness probes
+  are exposed. `MetricCardinalityTest` walks the whole `MeterRegistry` after boot and asserts no
+  meter carries a forbidden tag key (ADR-0030 cardinality rule).
+- **Integration (Testcontainers PostgreSQL):** `AuditRetentionIT` seeds 3 old + 2 fresh
+  `agent_executions` with children via raw JDBC; calls `AuditRetentionJob.runOnce()`; asserts
+  the three old parents and their cascaded `agent_steps` / `tool_executions` are gone; asserts
+  fresh parents and their children survive; asserts `retention.purge.deleted{table=…}` incremented
+  by exactly 3; a second invocation is a no-op.
+- **CI compatibility:** the scheduler is disabled in the `test` profile
+  (`audit.purge.enabled: false`) so surefire runs deterministically; the `it` profile keeps it
+  enabled (matches production) — the nightly cron will not fire during a short test run.
+

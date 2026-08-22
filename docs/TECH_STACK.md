@@ -96,3 +96,16 @@ Micrometer, Flyway, the M8 `FingerprintService` (for `arguments_hash`), and JUni
 5/Mockito/Testcontainers for tests. **No new runtime or test dependency, no Hibernate Envers, no
 Kafka/Elasticsearch, no new datastore** — audit is durable PostgreSQL alongside the existing domain
 tables. Spring Boot stays **3.4.1**. See ADR-0026…0029.
+
+## Milestone 10 — Observability & Retention Enforcement (one new dependency)
+
+M10 adds exactly one runtime dependency — `io.micrometer:micrometer-registry-prometheus` (version
+from the Boot 3.4.1 BOM) — to expose `/actuator/prometheus`. Everything else reuses existing
+building blocks: Spring Boot Actuator (health/liveness/readiness probes, info), Micrometer
+(counters/timers already used since M4), SLF4J MDC + Logback (pattern update only), Spring
+`@Scheduled` (no external scheduler), Spring JDBC (`JdbcTemplate` for the retention repo — no new
+JPA entity), and `java.util.concurrent.locks.ReentrantLock` for single-node purge overlap
+protection. **No Prometheus/Grafana/OTel/Kafka/Elasticsearch is deployed** — the app is simply
+made compatible with them (they arrive with the M12 docker-compose profile). Spring Boot stays
+**3.4.1**. See ADR-0030 (observability taxonomy + correlation) and ADR-0031 (retention
+enforcement).

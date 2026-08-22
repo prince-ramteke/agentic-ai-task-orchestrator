@@ -90,3 +90,23 @@ best-effort, so it never blocks or extends a domain transaction. `duration_ms` i
 fabricated; token usage is **not** stored (M4 avoided fabricating counts; M9 does not invent them).
 Actual audit-write timing is measured under Testcontainers during verification — no unsupported
 performance claims. See ADR-0027.
+
+## Milestone 10 — Retention purge cost (IMPLEMENTED)
+
+Retention is deliberately **batched** to avoid the two failure modes of a naïve `DELETE`:
+
+1. **Single unbounded DELETE** — long transaction blocks writers; a crash aborts everything.
+2. **Row-by-row DELETE** — 500× the round-trips for no benefit.
+
+`AuditRetentionJob` deletes in `AGENT_AUDIT_PURGE_BATCH_SIZE` (default 500) chunks, each in its
+own short `@Transactional` unit (so audit writers are held for at most one small batch), and caps
+`AGENT_AUDIT_PURGE_MAX_BATCHES` (default 100) per invocation — a hard ceiling of 50 000 parent
+rows per run. Larger backlogs naturally spread across successive nightly ticks. The delete uses
+`DELETE FROM agent_executions WHERE id IN (SELECT id ... ORDER BY started_at LIMIT :batch)`,
+which hits `idx_agent_exec_owner_started` and portably compiles on both PostgreSQL and H2
+PG-mode. Children (`agent_steps`, `tool_executions`) are removed by the existing
+`ON DELETE CASCADE` FKs — no join, no separate child pass.
+
+`retention.purge.duration` (Timer, tag `table`) measures the whole invocation;
+`retention.purge.deleted` (Counter) reports actual rows removed per batch. No latency figures are
+claimed in this doc without a measured source.

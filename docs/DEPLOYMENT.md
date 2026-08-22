@@ -114,3 +114,22 @@ GitHub Actions builds and tests on every PR (backend `mvn verify`, frontend buil
 The agent bounds are env-tunable (defaults shown; see `.env.example`): `AGENT_MAX_ITERATIONS=8`, `AGENT_MAX_TOOL_CALLS=10`, `AGENT_TIMEOUT_SECONDS=60`, `AGENT_LOOP_THRESHOLD=2`, `AGENT_MAX_OBSERVATION_CHARS=2000`, `AGENT_MAX_ARRAY_ITEMS=20`. `AGENT_MAX_RETRIES` is reserved for M8 (step-retry enforcement) and is not yet honored.
 
 **Redis is required as of M7** for agent conversation memory. Configure `REDIS_HOST`, `REDIS_PORT`, and (in non-dev) `REDIS_PASSWORD`; do not expose Redis publicly and keep any local data volume git-ignored. Two stores now run side by side: **PostgreSQL** (durable domain data) and **Redis** (ephemeral conversation memory) — plus **Ollama** (local LLM). Memory is env-tunable via `AGENT_MEMORY_TTL_SECONDS=86400` (sliding 24h), `AGENT_MEMORY_MAX_MESSAGES=50`, `AGENT_MEMORY_MAX_CHARS=12000`, `AGENT_MEMORY_CONTEXT_MAX_MESSAGES=12`, `AGENT_MEMORY_CONTEXT_MAX_CHARS=6000`. Failure is predictable (ADR-0019): a Redis outage fails an **existing**-conversation request with `503`, while a **new** conversation degrades to a stateless turn (`memoryStatus=UNAVAILABLE`) — the agent is not fully offline for one-shot requests. Spring Boot's default Redis health indicator is kept, so a Redis outage surfaces in `/actuator/health`.
+
+## Milestone 10 — Observability & retention environment variables
+
+- **Retention purge scheduler** (M10, ADR-0031): `AGENT_AUDIT_PURGE_ENABLED=true`,
+  `AGENT_AUDIT_PURGE_CRON="0 15 3 * * *"` (UTC — nightly 03:15),
+  `AGENT_AUDIT_PURGE_BATCH_SIZE=500`, `AGENT_AUDIT_PURGE_MAX_BATCHES=100`
+  (ceiling: batch × maxBatches = 50 000 rows per invocation). Disabled in the `test` profile so
+  surefire is deterministic; enabled in `it` and production.
+- **Prometheus scrape endpoint** (M10, ADR-0030): `/actuator/prometheus` is public at the app
+  layer. Restrict scrape access at the **network layer** (firewall / reverse-proxy allowlist) in
+  production — the app does not enforce a scrape token today.
+- **Kubernetes-style probes** (M10, ADR-0030): `/actuator/health/liveness` and
+  `/actuator/health/readiness` are separately exposed. The readiness group is deliberately
+  **`db` only** — Redis and Ollama are excluded (M7 memory degrades to stateless per ADR-0019;
+  Ollama failures are per-request `LLM_UNAVAILABLE` per M4). Point orchestrator readiness probes at
+  `/actuator/health/readiness`.
+- **Request correlation** (M10, ADR-0030): every response carries `X-Request-Id`. The filter
+  accepts a client-supplied UUID and echoes it, or mints a fresh UUIDv4. Junk values are
+  discarded — safe to forward from a reverse proxy that generates one.

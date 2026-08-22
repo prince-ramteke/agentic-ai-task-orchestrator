@@ -86,5 +86,26 @@ cross-user data path ships in M9).
 and never block or roll back the agent/domain path — a business action can succeed while its audit row
 is temporarily missing (recorded as `audit.write.failure`). **Never stored:** raw prompts, tool
 arguments, LLM output, system prompts, chain-of-thought, or secrets — only metadata, `arguments_hash`
-(SHA-256), and bounded summaries. Retention horizon `AGENT_AUDIT_RETENTION_DAYS` (default 90) is
-documented; **no purge scheduler in M9**. Dashboards are **M10 (PLANNED)**. See ADR-0026…0029.
+(SHA-256), and bounded summaries. See ADR-0026…0029.
+
+## Milestone 10 — Retention enforcement (IMPLEMENTED, supersedes "no purge scheduler in M9")
+
+`AGENT_AUDIT_RETENTION_DAYS` (default 90) is now **enforced** by the `AuditRetentionJob` (ADR-0031).
+The scheduler:
+- runs on `AGENT_AUDIT_PURGE_CRON` (default `0 15 3 * * *`, UTC);
+- deletes `agent_executions` rows where `started_at < now - retentionDays` (strictly less-than —
+  fresh rows always survive);
+- batches of `AGENT_AUDIT_PURGE_BATCH_SIZE` (default 500), capped at
+  `AGENT_AUDIT_PURGE_MAX_BATCHES` (default 100) per invocation → ceiling 50 000 rows/run;
+- relies on the existing `ON DELETE CASCADE` FKs so `agent_steps` and `tool_executions` are removed
+  transactionally with their parent (no separate child-delete pass);
+- each batch is its own short transaction, so a crash mid-loop leaves prior batches durably
+  committed;
+- best-effort on failure — logs WARN, increments `retention.purge.failure`, short-circuits the loop,
+  never rethrows;
+- single-node overlap-safe via `ReentrantLock.tryLock()`; a distributed lock is deferred.
+
+Disabled in the `test` profile (`audit.purge.enabled: false`) so surefire runs deterministically;
+enabled in `it` and `local`/production. Emits low-cardinality metrics `retention.purge.started`,
+`retention.purge.deleted`, `retention.purge.failure`, `retention.purge.duration` (tag: `table`
+only). No admin cross-user retention API — retention is time-based, not user-scoped.

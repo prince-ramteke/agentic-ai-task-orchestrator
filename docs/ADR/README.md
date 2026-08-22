@@ -76,13 +76,15 @@ Related ADRs, docs, issues.
 | ADR-0027 | Audit transaction & failure semantics | M9 | Accepted |
 | ADR-0028 | Audit payload privacy strategy | M9 | Accepted |
 | ADR-0029 | Agent execution history API | M9 | Accepted |
+| ADR-0030 | Observability metric taxonomy freeze + request correlation | M10 | Accepted |
+| ADR-0031 | Audit retention enforcement (scheduled, batched, best-effort) | M10 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Observability dashboards / metric-trace model | M10 |
-| Audit retention purge enforcement | M10+ |
+| Prometheus scrape-endpoint authentication (post-M10) | M12+ |
+| JSON log layout for containerised deployments | M12 |
 | Admin cross-user audit visibility | later (explicit decision) |
 
 These are *planned topics*, not decisions. A new ADR file gets the next free number

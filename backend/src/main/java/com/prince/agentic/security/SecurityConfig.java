@@ -45,7 +45,12 @@ public class SecurityConfig {
             "/api/v1/auth/**",
             "/api/v1/health",
             "/actuator/health",
+            "/actuator/health/**",
             "/actuator/info",
+            // M10 (ADR-0030): Prometheus scrape endpoint is public at the app layer. Production
+            // deployments must restrict scrape access at the network/reverse-proxy layer (documented
+            // in docs/SECURITY.md); Spring Security is not the enforcement point here.
+            "/actuator/prometheus",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"

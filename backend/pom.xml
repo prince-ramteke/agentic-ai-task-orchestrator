@@ -56,10 +56,18 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Actuator (health / info) -->
+        <!-- Actuator (health / info / prometheus) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- === Milestone 10: Prometheus scrape endpoint ===
+             Adds /actuator/prometheus. Version managed by the Spring Boot BOM. No provider is deployed
+             here — the app simply becomes compatible with a scrape-based collector (ADR-0030). -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
         <!-- Bean Validation foundation for request DTOs -->
@@ -277,6 +285,10 @@
                         <exclude>com/prince/agentic/tool/api/**</exclude>
                         <!-- M7: memory wiring (config only; the service/bounds/model ARE unit-tested). -->
                         <exclude>com/prince/agentic/memory/MemoryConfig.class</exclude>
+                        <!-- M10: observability wiring (filter registration only; the filter IS unit-tested). -->
+                        <exclude>com/prince/agentic/common/observability/ObservabilityConfig.class</exclude>
+                        <!-- M10: retention scheduling wiring (no business logic; the job IS unit-tested). -->
+                        <exclude>com/prince/agentic/audit/retention/SchedulingConfig.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>

@@ -17,7 +17,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 7 | Memory | ⬜ |
 | 8 | Guardrails | ✅ |
 | 9 | Auditing | ✅ |
-| 10 | Observability | ⬜ |
+| 10 | Observability | ✅ |
 | 11 | Testing & Evaluation | ⬜ |
 | 12 | Docker & Deployment | ⬜ |
 | 13 | Frontend & Demo | ⬜ |
@@ -114,13 +114,44 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs:** `AUDIT_LOGGING.md`, `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `API.md`, `DATABASE.md`, `TESTING.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `TECH_STACK.md`, `CHANGELOG.md`, ADR-0026…0029.
 - **DoD:** who/what/when/which-tool/result present per event; owner-scoped; idempotent; no secrets/PII/chain-of-thought.
 
-### Milestone 10 — Observability ⬜
-- **Objective:** Metrics + structured logging + dashboards for backend and agent/tool execution.
-- **Prerequisites:** M6.
-- **Outputs:** Micrometer metrics (latency, failure rate, tool count, agent success rate, LLM duration); correlation/execution IDs in logs; Prometheus + Grafana in compose; dashboards.
-- **Validation:** metrics scraped; dashboards render; IDs correlate a request end-to-end.
-- **Docs:** `OBSERVABILITY.md`, `CHANGELOG.md`.
-- **DoD:** an agent run is fully traceable via IDs and metrics.
+### Milestone 10 — Observability & Retention Enforcement ✅
+- **Objective:** Turn M4–M9 metrics/logging/health foundations into a coherent operational layer;
+  enforce audit retention.
+- **Prerequisites:** M6, M9.
+- **Delivered (IMPLEMENTED + VERIFIED 2026-08-22):** `com.prince.agentic.common.observability` —
+  `RequestIdFilter` (UUID-validated `X-Request-Id` echo, MDC `requestId` set/cleared with the request
+  lifecycle), `ObservabilityConfig` (filter registered at `HIGHEST_PRECEDENCE`). `AgentOrchestrator`
+  pushes M9 `executionId` into MDC for the loop only (restore-prior + `finally`). Logback pattern
+  updated to render `[%X{requestId}] [%X{executionId}]`. `micrometer-registry-prometheus` on the
+  classpath; `/actuator/prometheus` exposed and publicly reachable at the app layer (production
+  restricts at the network layer). `/actuator/health/{liveness,readiness}` enabled; readiness group
+  `db` only (Redis + Ollama deliberately excluded per M7 ADR-0019 / M4 semantics). Canonical metric
+  taxonomy documented in `OBSERVABILITY.md` §M10; no M4–M9 metric renamed. **Audit retention
+  enforcement** — `com.prince.agentic.audit.retention` (`AuditRetentionProperties`,
+  `AuditRetentionRepository`, `AuditRetentionJob`, `SchedulingConfig`) — nightly UTC batched DELETE
+  on `agent_executions started_at < now-retentionDays`, cascading via existing FKs, best-effort,
+  single-node `ReentrantLock.tryLock()` overlap-safe, per-invocation ceiling
+  `batchSize × maxBatches`. New env: `AGENT_AUDIT_PURGE_ENABLED/CRON/BATCH_SIZE/MAX_BATCHES`
+  (defaults `true / 0 15 3 * * * / 500 / 100`). New metrics: `retention.purge.{started,deleted,
+  failure,duration}` (tag `table` only). Disabled in `test` profile so surefire is deterministic.
+  `MetricCardinalityTest` locks the "no userId/executionId/requestId/... in any metric tag" rule.
+- **Validation (VERIFIED 2026-08-22):** `./mvnw clean verify` PASS — 383 unit + 44 integration
+  (3 skipped for live Ollama), coverage 92.71% instruction / 74.14% branch (JaCoCo gate held at
+  ≥75% instruction). `AuditRetentionIT` proves parent-first CASCADE across real PostgreSQL: 3 old
+  + 2 fresh executions with children → after `runOnce()`, only fresh remain, cascaded children of
+  purged parents gone, fresh parents' children untouched, `retention.purge.deleted` incremented by
+  exactly 3, second call is a no-op. `ObservabilityEndpointsTest` proves `/actuator/prometheus`
+  200 with `jvm_*` output; `/actuator/health/{liveness,readiness}` reachable; `X-Request-Id`
+  minted, echoed for valid UUIDs, replaced for junk. `MetricCardinalityTest` walks the whole
+  registry post-boot and finds no forbidden tag key.
+- **Decisions:** ADR-0030 (observability taxonomy freeze + correlation), ADR-0031 (retention
+  enforcement: scheduled, batched, best-effort).
+- **Docs updated:** `OBSERVABILITY.md`, `AUDIT_LOGGING.md`, `DATABASE.md`, `SECURITY.md`,
+  `DATA_PRIVACY.md`, `PERFORMANCE.md`, `DEPLOYMENT.md`, `TESTING.md`, `TECH_STACK.md`,
+  `CHANGELOG.md`, `README.md`, `backend/README.md`, `.env.example`, `ADR/README.md`.
+- **Deferred (M12+):** Prometheus scrape-endpoint authentication (network ACL for now); JSON logs
+  for containerised deployments; Prometheus/Grafana/OTel infrastructure deployment; multi-node
+  purge coordination (`pg_try_advisory_lock`); distributed tracing.
 
 ### Milestone 11 — Testing & Evaluation ⬜
 - **Objective:** Complete the test pyramid and a reproducible agent evaluation suite.

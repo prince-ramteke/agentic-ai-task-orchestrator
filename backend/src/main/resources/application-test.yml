@@ -37,6 +37,12 @@ management:
     redis:
       enabled: false
 
+# M10: the scheduled AuditRetentionJob is disabled in the test profile so surefire/failsafe runs
+# stay deterministic (integration tests invoke the job explicitly). See ADR-0031.
+audit:
+  purge:
+    enabled: false
+
 # M4: no live model in tests. The OllamaLlmClient bean IS constructed (provider=ollama), but its
 # Spring AI beans build network-free at startup (pull-model-strategy=never), so no test calls Ollama.
 # Tests that exercise the AI layer inject a FakeLlmClient (@Primary) instead of hitting the model.

@@ -36,8 +36,13 @@
 - Login authenticates via Spring Security's `AuthenticationManager` + a DAO provider
   (`CustomUserDetailsService`); per-request auth is a stateless filter that verifies the token
   and builds an `AuthenticatedUser` from claims — **no DB lookup per request** (ADR-0004).
-- Public routes only: `/api/v1/auth/**`, `/api/v1/health`, `/actuator/health`, `/actuator/info`,
-  and the Swagger/OpenAPI paths. **Everything else requires a valid token (deny by default).**
+- Public routes only: `/api/v1/auth/**`, `/api/v1/health`, `/actuator/health` (+ Boot's
+  `liveness`/`readiness` sub-paths), `/actuator/info`, `/actuator/prometheus` (M10, ADR-0030), and
+  the Swagger/OpenAPI paths. **Everything else requires a valid token (deny by default).**
+  Note: `/actuator/prometheus` is public at the app layer so an ordinary scraper (Prometheus,
+  vmagent) can reach it without a JWT. In production, restrict scrape access at the **network
+  layer** (firewall / reverse-proxy allowlist) — a scrape-token model can be added later with its
+  own ADR.
 
 ## 2. Authorization (RBAC + ownership) — IMPLEMENTED (RBAC) / FOUNDATION (ownership)
 

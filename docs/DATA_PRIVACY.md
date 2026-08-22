@@ -94,5 +94,23 @@ durations/timestamps, correlation ids, an `arguments_hash` (SHA-256 of canonical
 length-capped, redacted summaries (`final_response_summary`, `result_summary`; caps via `audit.*`).
 **Never stored:** raw prompts, raw tool arguments, raw tool results, system prompts, hidden reasoning /
 **chain-of-thought**, JWTs, passwords, or secrets. `conversation_id` is stored as a correlation id only
-— never the Redis memory blob. Read APIs return sanitized DTOs. Retention is durable with a documented
-horizon (`AGENT_AUDIT_RETENTION_DAYS`, default 90); no automated purge in M9. See ADR-0028.
+— never the Redis memory blob. Read APIs return sanitized DTOs. See ADR-0028.
+
+## Milestone 10 — Correlation IDs and retention enforcement (IMPLEMENTED)
+
+Only two new MDC keys are populated by M10 and they contain **UUIDs only**:
+
+| MDC key | Value | Set by | Cleared by |
+|---|---|---|---|
+| `requestId` | UUIDv4 (accepted from `X-Request-Id` iff it parses as UUID; otherwise minted) | `RequestIdFilter` | filter `finally` |
+| `executionId` | M9 `agent_executions.execution_uid` (UUID) | `AgentOrchestrator` | orchestrator `finally` |
+
+`X-Request-Id` is not trusted verbatim — a junk header (a path fragment, injection attempt, etc.) is
+discarded and a fresh UUIDv4 is minted, so an attacker cannot poison logs or MDC via that header.
+No new content is logged. Prompts, tool arguments, JWTs, and confirmation IDs remain out of both
+logs and metric tags (ADR-0030 cardinality rule).
+
+Audit retention is now **enforced** (M9 documented the horizon; M10 shipped the purge). The
+scheduled `AuditRetentionJob` deletes `agent_executions started_at < now - retentionDays` in
+bounded batches, cascading `agent_steps` and `tool_executions` via existing FKs. No new column is
+read or written; no privacy surface changes. See ADR-0031.

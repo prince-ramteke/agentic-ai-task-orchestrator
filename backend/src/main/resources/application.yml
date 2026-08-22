@@ -75,13 +75,21 @@ guardrail:
   user-tool-budget-per-min: ${AGENT_USER_TOOL_BUDGET_PER_MIN:60}
   max-argument-chars: ${AGENT_MAX_ARGUMENT_CHARS:4000}
 
-# --- Durable agent audit (M9): PostgreSQL execution history. retention-days documents the intended
-#     horizon only; NO purge scheduler runs in M9. Summaries are length-capped (redacted). See
-#     docs/AUDIT_LOGGING.md. ---
+# --- Durable agent audit (M9): PostgreSQL execution history. Retention is now enforced by the
+#     scheduled AuditRetentionJob (M10, ADR-0031). Summaries are length-capped (redacted).
+#     See docs/AUDIT_LOGGING.md, docs/OBSERVABILITY.md. ---
 audit:
   retention-days: ${AGENT_AUDIT_RETENTION_DAYS:90}
   final-summary-max-chars: ${AGENT_AUDIT_FINAL_SUMMARY_MAX_CHARS:500}
   result-summary-max-chars: ${AGENT_AUDIT_RESULT_SUMMARY_MAX_CHARS:500}
+  # --- Audit retention purge (M10): parent-first batched DELETE on agent_executions with
+  #     cascading FK cleanup of steps + tool_executions. Best-effort, single-node overlap-safe.
+  #     Disabled in `test` profile so CI stays deterministic. UTC cron. See ADR-0031. ---
+  purge:
+    enabled: ${AGENT_AUDIT_PURGE_ENABLED:true}
+    cron: ${AGENT_AUDIT_PURGE_CRON:0 15 3 * * *}
+    batch-size: ${AGENT_AUDIT_PURGE_BATCH_SIZE:500}
+    max-batches: ${AGENT_AUDIT_PURGE_MAX_BATCHES:100}
 
 # --- LLM layer (the app's own keys, kept independent of the spring.ai.* auto-config keys). ---
 llm:
@@ -105,19 +113,33 @@ security:
 server:
   port: 8080
 
-# Actuator: expose ONLY health and info over HTTP. Health details are hidden by default
-# (no dependency internals leaked); local dev turns them on (see application-local.yml).
+# Actuator: expose health, info, prometheus (M10). Health details hidden by default (no dependency
+# internals leaked); local dev turns them on (see application-local.yml). Kubernetes-style liveness /
+# readiness probes are enabled; the `readiness` group intentionally includes ONLY `db` — Redis
+# (M7 memory degrades to stateless) and Ollama (LLM failures are per-request) do NOT gate readiness.
+# See ADR-0030 and docs/OBSERVABILITY.md.
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: db
+    prometheus:
+      access: read_only
   info:
     env:
       enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
 
 info:
   app:
@@ -133,6 +155,11 @@ springdoc:
     path: /swagger-ui.html
 
 logging:
+  # M10 (ADR-0030): render requestId + executionId from MDC when present, so an operator can pivot
+  # request -> agent execution -> audit row from the console. Bracketed placeholders render empty
+  # when the MDC key is unset (e.g. non-agent requests, background tasks).
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{executionId:-}] %logger{36} - %msg%n"
   level:
     root: INFO
     com.prince.agentic: INFO

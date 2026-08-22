@@ -9,7 +9,72 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 10 — Observability dashboards (Prometheus/Grafana), retention purge enforcement._
+_Next: Milestone 11 — Testing & Evaluation (reproducible agent eval dataset + runner)._
+
+---
+
+## [0.0.10] — 2026-08-22 — Milestone 10: Observability & Retention Enforcement
+
+### Added
+- **Request correlation** (`com.prince.agentic.common.observability`): `RequestIdFilter`
+  (`OncePerRequestFilter` at `HIGHEST_PRECEDENCE`) accepts `X-Request-Id` only when it parses as a
+  UUID, otherwise mints a fresh UUIDv4; sets MDC key `requestId`; echoes the header back on the
+  response; clears MDC in `finally` (thread-pool safety). `ObservabilityConfig` registers it.
+- **Agent MDC**: `AgentOrchestrator` pushes M9 `executionId` into MDC key `executionId` for the
+  loop only (restore-prior + `finally`) — no new IDs minted.
+- **Prometheus scrape**: `io.micrometer:micrometer-registry-prometheus` (from Boot BOM);
+  `management.endpoints.web.exposure.include: health,info,prometheus`;
+  `/actuator/prometheus` whitelisted in `SecurityConfig` (prod restricts at network layer).
+- **Kubernetes-style health probes**: `management.endpoint.health.probes.enabled: true`;
+  `readiness` group deliberately includes **only `db`** (Redis + Ollama excluded — M7 memory
+  degrades to stateless per ADR-0019; Ollama failures are per-request `LLM_UNAVAILABLE` per M4).
+- **Audit retention enforcement** (`com.prince.agentic.audit.retention`):
+  `AuditRetentionProperties` (`audit.purge.*`), `AuditRetentionRepository` (JDBC batched
+  DELETE-WHERE-IN-subquery-LIMIT; portable PG + H2 PG-mode), `AuditRetentionJob`
+  (`@Scheduled`, `ReentrantLock.tryLock()` overlap-safe, best-effort short-circuit on batch
+  failure, per-invocation ceiling `batchSize × maxBatches`), `SchedulingConfig`
+  (`@EnableScheduling`). Cutoff column `agent_executions.started_at` (NOT NULL, indexed;
+  `completed_at` explicitly rejected — nullable would strand crashed runs). Children cascade via
+  existing `V5` `ON DELETE CASCADE` FKs.
+- **New metrics** (all with a single bounded `table` tag): `retention.purge.started`,
+  `retention.purge.deleted`, `retention.purge.failure`, `retention.purge.duration`.
+- **Env keys**: `AGENT_AUDIT_PURGE_ENABLED=true`, `AGENT_AUDIT_PURGE_CRON=0 15 3 * * *`,
+  `AGENT_AUDIT_PURGE_BATCH_SIZE=500`, `AGENT_AUDIT_PURGE_MAX_BATCHES=100`.
+
+### Changed
+- **Logback pattern** (`application.yml`): `[%X{requestId:-}] [%X{executionId:-}]` in the console
+  layout so every log line carries the correlation IDs when set.
+- **Actuator exposure** widened from `health,info` to `health,info,prometheus`. `SecurityConfig`
+  public whitelist gains `/actuator/health/**` (probe sub-paths) and `/actuator/prometheus`.
+- **Test profile** (`application-test.yml`) disables the retention scheduler
+  (`audit.purge.enabled: false`) so surefire remains deterministic; the `it` profile keeps it
+  enabled (matches production) — ITs invoke `AuditRetentionJob.runOnce()` directly.
+- **JaCoCo excludes** extended for the two new pure-wiring classes (`ObservabilityConfig`,
+  `SchedulingConfig`); business logic (filter, job, properties, repository) is fully covered.
+
+### Metrics taxonomy
+- **No M4–M9 metric was renamed.** M10 only added the four `retention.purge.*` names above.
+- Cardinality rule (ADR-0030) enforced by `MetricCardinalityTest`: no meter may carry `userId`,
+  `conversationId`, `executionId`, `requestId`, `confirmationId`, `arguments`, `argumentsHash`,
+  `prompt`, or `promptText` as a tag key.
+
+### Security / Privacy
+- `X-Request-Id` is validated as UUID before being trusted (defence against MDC/log-injection).
+- `/actuator/prometheus` publicly reachable at the app layer; production restricts at the network
+  layer (documented in `SECURITY.md`). `/actuator/info` and `/actuator/env` exposure unchanged.
+- MDC contents enumerated (`requestId`, `executionId` — both UUIDs); no prompts, arguments, JWTs,
+  or secrets are logged.
+
+### Decisions
+- **ADR-0030** — Observability metric taxonomy freeze + request correlation.
+- **ADR-0031** — Audit retention enforcement (scheduled, batched, best-effort).
+
+### Verified (2026-08-22)
+- `./mvnw clean verify` PASS — 383 unit + 44 integration (3 skipped for live Ollama).
+- JaCoCo instruction coverage 92.71% (9414 / 10154); branch 74.14%. Gate ≥ 75% instruction held.
+- `AuditRetentionIT` proves parent-first CASCADE across real Postgres (Testcontainers).
+- `ObservabilityEndpointsTest` proves `/actuator/prometheus` 200 with `jvm_*` output and
+  round-trips `X-Request-Id` per the ADR-0030 contract.
 
 ---
 

@@ -1,6 +1,6 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 9** it provides the backend foundation, the
+Spring Boot backend module. Through **Milestone 10** it provides the backend foundation, the
 authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
 domains (CRUD, ownership, pagination, PostgreSQL), the **LLM foundation** (`LlmClient` over local
 **Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), the **tool framework** — a
@@ -124,7 +124,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Observability dashboards (M10), retention purge enforcement (M10+), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests. **M8 and M9 added no new dependencies** — guardrails/confirmation/rate-limiting reuse Spring, Jackson, the M7 Redis template, and `java.security.MessageDigest`; durable audit reuses Spring Data JPA, Flyway, and the M8 `FingerprintService`.)
+Full Prometheus/Grafana/OTel infrastructure deployment (M12 compose), JSON container logs (M12), a cloud LLM fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests. **M8 and M9 added no new dependencies** — guardrails/confirmation/rate-limiting reuse Spring, Jackson, the M7 Redis template, and `java.security.MessageDigest`; durable audit reuses Spring Data JPA, Flyway, and the M8 `FingerprintService`. **M10 added exactly one runtime dependency** — `io.micrometer:micrometer-registry-prometheus` to expose `/actuator/prometheus`; everything else — MDC correlation, health probes, scheduled retention purge — reuses Spring Boot Actuator, Spring `@Scheduled`, Spring JDBC, and `ReentrantLock`.)
 
 ## Docker
 

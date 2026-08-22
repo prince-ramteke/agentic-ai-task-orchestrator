@@ -106,4 +106,86 @@ Micrometer counters (low-cardinality labels only — `stepType`/`outcome`; never
 args): `audit.execution.created`, `audit.step.created`, `audit.tool_execution.created`,
 `audit.write.success`, `audit.write.failure`. A swallowed audit-write failure is observable via
 `audit.write.failure` + a WARN log (best-effort; never blocks the agent path). These do not duplicate
-the M8 `guardrail.*` metrics. Full dashboards/aggregation remain **M10 (PLANNED)**.
+the M8 `guardrail.*` metrics.
+
+## Milestone 10 — Observability & retention enforcement (IMPLEMENTED)
+
+M10 turns the M4–M9 foundations into a coherent operational layer (ADR-0030, ADR-0031). It does
+**not** deploy Prometheus, Grafana, OTel, Elasticsearch, or Kafka — the app is simply made compatible
+with them. Full dashboards/deployment topology remain M12+.
+
+### Canonical metric taxonomy (frozen)
+
+M10 does **not** rename any existing metric. The full list below is exactly what the app emits.
+Cardinality rule (enforced by `MetricCardinalityTest`): no meter may carry any of `userId`,
+`conversationId`, `executionId`, `requestId`, `confirmationId`, `arguments`, `argumentsHash`,
+`prompt`, or `promptText` as a tag key. `tool` is bounded because tools are registered explicitly in
+the M5 `ToolRegistry`.
+
+| Metric | Type | Tags | Source |
+|---|---|---|---|
+| `http.server.requests` | timer | `method`, `uri`, `status`, `outcome` | Boot auto |
+| `llm.request.duration` | timer | `op`, `provider`, `model`, `outcome` | M4 |
+| `llm.request.result` | counter | `op`, `provider`, `model`, `outcome` | M4 |
+| `tool.execution.duration` | timer | `tool`, `risk`, `outcome` | M5 |
+| `tool.execution.result` | counter | `tool`, `risk`, `outcome` | M5 |
+| `agent.execution.count` | counter | `status` | M6 |
+| `agent.execution.duration` | timer | `status` | M6 (surfaced in M10) |
+| `agent.iterations` | distribution summary | *(untagged)* | M6 |
+| `agent.tool.calls` | counter | *(untagged)* | M6 |
+| `agent.loop.detected` | counter | *(untagged)* | M6 |
+| `agent.limit.reached` | counter | `limit` ∈ {`iteration`,`tool_call`} | M6 |
+| `agent.conversation` | counter | `memoryStatus` | M7 |
+| `memory.load` | timer | *(untagged)* | M7 |
+| `memory.append` | timer | *(untagged)* | M7 |
+| `memory.trim`, `memory.hit`, `memory.miss` | counter | *(untagged)* | M7 |
+| `memory.unavailable` | counter | `op` ∈ {`load`,`append`,`delete`,`degrade`} | M7 |
+| `guardrail.allow`, `guardrail.deny`, `guardrail.policy_violation`, `guardrail.confirmation_required` | counter | `tool`, `riskLevel` | M8 |
+| `guardrail.confirmation_approved` | counter | `riskLevel` | M8 |
+| `guardrail.confirmation_expired`, `guardrail.rate_limited` | counter | *(untagged)* | M8 |
+| `audit.execution.created` | counter | *(untagged)* | M9 |
+| `audit.step.created` | counter | `stepType` | M9 |
+| `audit.tool_execution.created` | counter | `outcome` | M9 |
+| `audit.write.success` | counter | *(untagged)* | M9 |
+| `audit.write.failure` | counter | `kind` | M9 |
+| `retention.purge.started` | counter | `table` | **M10** |
+| `retention.purge.deleted` | counter | `table` (incremented by row count per batch) | **M10** |
+| `retention.purge.failure` | counter | `table` | **M10** |
+| `retention.purge.duration` | timer | `table` | **M10** |
+
+### Correlation / MDC contract (ADR-0030)
+
+| MDC key | Set by | Cleared by | Present on |
+|---|---|---|---|
+| `requestId` | `RequestIdFilter` at the edge | filter `finally` | every log line during a request |
+| `executionId` | `AgentOrchestrator` (loop entry) | orchestrator `finally` | every log line inside an agent run |
+
+`X-Request-Id` request header is honoured **only** when it parses as a UUID (defence against
+MDC/log-injection); otherwise the filter mints a fresh UUIDv4. The chosen id is always echoed back
+on the `X-Request-Id` response header. `AgentOrchestrator` reuses the M9 `agent_executions.execution_uid`
+for MDC — no new IDs are minted. Log pattern:
+
+```
+%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{executionId:-}] %logger{36} - %msg%n
+```
+
+### Health / readiness
+
+| Endpoint | Behaviour |
+|---|---|
+| `GET /actuator/health` | Aggregate: DB + Redis auto-config indicators. |
+| `GET /actuator/health/liveness` | Process alive (Boot default probe). |
+| `GET /actuator/health/readiness` | **DB only.** Redis and Ollama are deliberately excluded (Redis outage → M7 memory degrades to stateless; Ollama failures are per-request `LLM_UNAVAILABLE`). |
+| `GET /actuator/info` | App name + version (unchanged). |
+| `GET /actuator/prometheus` | Prometheus scrape output; public at the app layer, prod-restricted at the network layer. |
+
+### Audit retention enforcement (ADR-0031)
+
+`AuditRetentionJob` runs on the cron in `AGENT_AUDIT_PURGE_CRON` (default nightly at 03:15 UTC),
+deletes `agent_executions` rows where `started_at < now - retentionDays` in batches of
+`AGENT_AUDIT_PURGE_BATCH_SIZE` (default 500), capped at `AGENT_AUDIT_PURGE_MAX_BATCHES` (default
+100) per invocation. Children (`agent_steps`, `tool_executions`) cascade via existing FKs. Each
+batch is its own short transaction; failures WARN + `retention.purge.failure` + short-circuit
+without rethrowing. Overlap is prevented by an in-process `ReentrantLock.tryLock()` (single-node
+scope; distributed coordination is deferred). Disabled in the `test` profile so surefire stays
+deterministic.
