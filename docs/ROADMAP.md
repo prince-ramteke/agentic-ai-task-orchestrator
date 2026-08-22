@@ -86,13 +86,14 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs:** `AGENT_ARCHITECTURE.md`, `GUARDRAILS.md`, `API.md` (agent endpoint), `TOOL_SYSTEM.md`, `SECURITY.md`, `OBSERVABILITY.md`, `CHANGELOG.md`; ADR-0013…0016.
 - **DoD:** LLM never bypasses authorization; every effect flows through the M5 `ToolExecutor`; no unbounded execution path. *(Durable, retrievable execution records: M9.)*
 
-### Milestone 7 — Memory ⬜
-- **Objective:** Redis-backed conversation/session/execution state and caching, cleanly separated from durable Postgres data.
+### Milestone 7 — Memory ✅ IMPLEMENTED
+- **Objective:** Redis-backed conversation memory, cleanly separated from durable Postgres data, enabling bounded multi-turn agent conversations.
 - **Prerequisites:** M6.
-- **Outputs:** Redis integration; conversation context + execution state with TTLs; Testcontainers Redis tests.
-- **Validation:** state survives within a session and expires per TTL; no durable data placed in Redis.
-- **Docs:** `MEMORY.md`, `PERFORMANCE.md` (caching), `CHANGELOG.md`.
-- **DoD:** durable-vs-ephemeral split verified by tests.
+- **Delivered (IMPLEMENTED + VERIFIED 2026-08-22):** `com.prince.agentic.memory` — `ConversationMemoryService`/`RedisConversationMemoryService` (Spring Data Redis + Lettuce), JSON-blob storage under `conv:{userId}:{conversationId}` (server-minted UUIDv4), `MemoryBounds` dual bounds (storage 50/12,000; LLM-context 12/6,000), sliding 24h TTL, `MemoryProperties` (`agent.memory.*`). M6 integration via `AgentConversationService` (orchestrator stays Redis-free; new delimited `{history}` prompt slot). API: optional `conversationId` + `conversationId`/`memoryStatus` on `POST /api/v1/agent/execute`, `DELETE /api/v1/agent/conversations/{id}`. Hybrid failure semantics (existing→503 fail-closed, new→stateless degrade). `memory.*` metrics.
+- **Validation:** unit + real-Redis Testcontainers (`redis:7-alpine`) — round-trip, trimming, sliding TTL, real expiration, delete, cross-user 404 isolation; multi-turn `AgentConversationIT` proves turn 2's prompt carries turn 1's bounded context; backward-compat (no-conversationId path). `verify` needs no live Ollama; overall coverage 93%.
+- **Decisions:** ADR-0017 (architecture), ADR-0018 (retention & bounding), ADR-0019 (failure semantics), ADR-0020 (ownership & isolation).
+- **Docs updated:** `MEMORY.md`, `AGENT_ARCHITECTURE.md`, `API.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `TESTING.md`, `DEPLOYMENT.md`, `TECH_STACK.md`, `GUARDRAILS.md`, `AUDIT_LOGGING.md`, `CHANGELOG.md`, `README.md`, `backend/README.md`, `.env.example`.
+- **Deferred:** session/execution-state + cache Redis rows, hard guardrails/confirmation/rate-limiting (M8), durable agent audit (M9), semantic/vector memory & RAG.
 
 ### Milestone 8 — Guardrails ⬜
 - **Objective:** Bounded, safe execution — max tool calls, timeout, retry limit, loop detection, confirmation for dangerous ops, output validation, rate limiting, cancellation.

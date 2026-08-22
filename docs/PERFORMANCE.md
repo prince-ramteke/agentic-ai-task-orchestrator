@@ -60,3 +60,15 @@ Benchmarks/load tests are separate from the correctness suite and are not gated 
 ## Milestone 6 — Agent latency (measured, not claimed)
 
 An agent run is inherently slower than a plain endpoint (multiple LLM round-trips + tool calls). M6 **measures** and returns `durationMs` per run and records `agent.execution.duration` (Micrometer); it makes **no** unmeasured latency claim. The whole run shares one wall-clock deadline (`AGENT_TIMEOUT_SECONDS`, computed once); observations are size-bounded to keep prompt/context growth in check. Hard per-tool timeouts and rate limiting are M8.
+
+## Milestone 7 — Conversation memory (IMPLEMENTED)
+
+- Redis is single round-trip per turn: one `GET` at load (existing conversations only), one `SET EX`
+  at append. A short client timeout (`spring.data.redis.timeout=2s`) makes a Redis outage degrade fast
+  rather than hang the request thread.
+- Memory is doubly bounded so neither Redis nor the LLM context grows without limit: storage
+  (50 msgs / 12,000 chars) and a smaller prompt-context slice (12 msgs / 6,000 chars) — the full stored
+  history is never sent to the model.
+- Memory work happens **outside** the M6 loop and never spans a DB transaction (load → run → append).
+- `memory.load`/`memory.append` timers are exposed; no performance numbers are claimed here beyond the
+  Testcontainers-verified functional behavior.

@@ -27,6 +27,16 @@ security:
   cors:
     allowed-origins: http://localhost:5173
 
+# M7: the `test` profile is deliberately infrastructure-free (H2, no Docker, no Redis). The Redis
+# conversation-memory bean is still constructed, but no surefire test drives it against a live server
+# (memory-touching tests inject a FakeConversationMemoryService). Spring Boot's default Redis health
+# indicator stays enabled in every real profile (local/prod) and in the Redis-backed `it` profile;
+# here it is disabled so /actuator/health reflects only the infrastructure this profile actually runs.
+management:
+  health:
+    redis:
+      enabled: false
+
 # M4: no live model in tests. The OllamaLlmClient bean IS constructed (provider=ollama), but its
 # Spring AI beans build network-free at startup (pull-model-strategy=never), so no test calls Ollama.
 # Tests that exercise the AI layer inject a FakeLlmClient (@Primary) instead of hitting the model.

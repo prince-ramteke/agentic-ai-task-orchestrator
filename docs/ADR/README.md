@@ -63,12 +63,15 @@ Related ADRs, docs, issues.
 | ADR-0014 | Agent execution loop & cooperative budgets | M6 | Accepted |
 | ADR-0015 | Agent / tool orchestration boundary | M6 | Accepted |
 | ADR-0016 | Agent loop detection | M6 | Accepted |
+| ADR-0017 | Redis conversation memory architecture | M7 | Accepted |
+| ADR-0018 | Memory retention & bounding strategy | M7 | Accepted |
+| ADR-0019 | Redis failure semantics | M7 | Accepted |
+| ADR-0020 | Conversation ownership & isolation | M7 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Redis for conversation/execution memory | M7 |
 | Confirmation policy for dangerous operations | M8 |
 
 These are *planned topics*, not decisions. A new ADR file gets the next free number (ADR-0009, …)

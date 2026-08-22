@@ -118,3 +118,20 @@ Three levels, all deterministic and offline (`./mvnw verify` needs **no** live O
 - **Orchestrator:** `AgentOrchestratorTest` drives the real `AgentOrchestrator` over a `ScriptedLlmClient` (a sequence-aware `LlmClient` test double) — direct FINAL, single/multi tool call, invalid-decision repair (success + failure), tool-not-found/unauthorized/failure observations, iteration/tool-call limits, loop detection, timeout (advancing `Clock`), cancellation (external token), and side-effect-retry safety.
 - **Integration:** `AgentExecuteIT` (`@SpringBootTest` + Testcontainers Postgres, `ScriptedLlmClient` as `@Primary`) exercises the authenticated endpoint → real orchestrator → real `ToolExecutor` → real `TaskService` → real DB, with the security cases (own-data, cross-user 404, admin any-by-id, identity-spoof ignored, unregistered tool not executed, 401).
 - **Boundary:** `AgentArchitectureBoundaryTest` scans `agent.*` for forbidden imports (repository/`EntityManager`/`JdbcTemplate`/domain services/Spring AI).
+
+## Milestone 7 — Memory tests (IMPLEMENTED)
+
+- **Unit:** `MemoryPropertiesTest`, `MemoryBoundsTest` (deterministic trim/render, both bounds),
+  `RedisConversationMemoryServiceTest` (mocked `StringRedisTemplate`: round-trip, owner-mismatch/
+  malformed-blob masked 404, Redis-down → 503, sliding-TTL write, trim, delete),
+  `AgentConversationServiceTest` (hybrid policy, history-passing, degrade), `MemoryArchitectureBoundaryTest`
+  (no Spring AI / tools / domain / persistence in the memory package). `FakeConversationMemoryService`
+  is the deterministic double for agent/service tests.
+- **Redis integration (Testcontainers `redis:7-alpine`, Docker-skip):** `RedisConversationMemoryIT` —
+  append/load round-trip, user-scoped key, storage trim, sliding-TTL set, **real expiration** (short TTL
+  + Awaitility), delete, and **cross-user 404 isolation**. The shared IT base now starts both PostgreSQL
+  and Redis so the `it` profile mirrors production.
+- **Agent multi-turn (`AgentConversationIT`, real Redis + Postgres + `ScriptedLlmClient`):** proves
+  turn 2's captured LLM prompt **contains turn 1's bounded context** (not merely that Redis holds data),
+  plus cross-user 404, backward-compat (no `conversationId`), and delete-then-reuse → 404.
+- Live Ollama tests stay profile-gated. `./mvnw verify` runs the Redis IT for real when Docker is present.

@@ -164,17 +164,32 @@ tool exception ever reaches HTTP): `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` 
 `TOOL_UNAUTHORIZED` (401), `TOOL_FORBIDDEN` (403), `TOOL_TIMEOUT` (504, reserved for M8),
 `TOOL_EXECUTION_FAILED` (500). A domain error (e.g. `NOT_FOUND`) is preserved with its own code.
 
-### Agent endpoint (M6) — VERIFIED
+### Agent endpoint (M6 + M7 memory) — VERIFIED
 
 | Method | Path | Auth | Success | Notes |
 |---|---|---|---|---|
-| POST | `/api/v1/agent/execute` | **authenticated** | 200 | Run one bounded agent execution over the registered tools |
+| POST | `/api/v1/agent/execute` | **authenticated** | 200 | Run one bounded agent execution; optionally continue a conversation |
+| DELETE | `/api/v1/agent/conversations/{id}` | **authenticated** | 204 | Delete the caller's conversation memory (404-masked) |
 
-Request: `{ "message": "Show me my high-priority tasks" }` — `message` is `@NotBlank`, ≤ **4000** chars.
+Request: `{ "message": "Show me my high-priority tasks", "conversationId"?: "<uuid>" }` — `message` is
+`@NotBlank`, ≤ **4000** chars; `conversationId` is **optional** and, when present, must be a UUID
+(non-UUID → `400 VALIDATION_ERROR`). **Absent `conversationId` starts a new conversation.**
 
-Response (200): `{ "executionId", "status", "response", "iterations", "toolCalls", "durationMs", "failureCode" }`
-where `status ∈ COMPLETED | FAILED | TIMED_OUT | CANCELLED | LIMIT_REACHED | LOOP_DETECTED` and
-`failureCode` is present (non-null) only for non-`COMPLETED` runs.
+Response (200): `{ "executionId", "status", "response", "iterations", "toolCalls", "durationMs",
+"failureCode", "conversationId", "memoryStatus" }` where `status ∈ COMPLETED | FAILED | TIMED_OUT |
+CANCELLED | LIMIT_REACHED | LOOP_DETECTED` and `failureCode` is present (non-null) only for
+non-`COMPLETED` runs.
+
+**M7 memory (additive, non-breaking — existing M6 fields unchanged):**
+- `conversationId` — the **server-minted UUID** to continue this conversation on the next call; `null`
+  when a new conversation could not be persisted (Redis unavailable). Server-minted only; clients never
+  supply their own new id.
+- `memoryStatus` — `ACTIVE` (loaded/created and persisted) or `UNAVAILABLE` (Redis down: a new
+  conversation ran stateless, or an existing turn could not be persisted best-effort).
+- **Ownership & failure:** a missing / expired / non-owned `conversationId` → **404**
+  `CONVERSATION_NOT_FOUND` (existence-masked). Redis unreachable while loading an **existing**
+  conversation → **503** `MEMORY_UNAVAILABLE` (fail-closed, before any tool runs). `DELETE` returns
+  `204` on success, `404` for a missing/foreign conversation. See ADR-0017…0020, `MEMORY.md`.
 
 **Two-tier error model.** A run that actually starts and then terminates in a controlled state
 (`FAILED`/`LIMIT_REACHED`/`LOOP_DETECTED`/`TIMED_OUT`/`CANCELLED`) returns **HTTP 200** with a stable

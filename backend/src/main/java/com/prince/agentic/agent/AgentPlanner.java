@@ -24,9 +24,10 @@ public class AgentPlanner {
         this.catalog = catalog;
     }
 
-    public AgentDecision decide(String userMessage, List<AgentObservation> observations,
+    public AgentDecision decide(String userMessage, String history, List<AgentObservation> observations,
                                 int iterationsLeft, int toolCallsLeft) {
-        String prompt = prompts.render(userMessage, catalog.render(), observations, iterationsLeft, toolCallsLeft);
+        String prompt = prompts.render(userMessage, history, catalog.render(), observations,
+                iterationsLeft, toolCallsLeft);
         AgentDecision d = attempt(prompt);
         if (!validator.isValid(d)) {
             String repair = prompt + "\n\nYour previous answer was invalid. "

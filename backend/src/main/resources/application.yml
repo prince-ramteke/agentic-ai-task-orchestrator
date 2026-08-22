@@ -26,6 +26,17 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  # --- Redis (M7): ephemeral, bounded, TTL'd agent conversation memory (docs/MEMORY.md).
+  #     Never durable domain data. Short connect/command timeout so a Redis outage degrades fast
+  #     (new conversations run stateless) instead of hanging the request thread. ---
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
+
   # --- Spring AI / Ollama (M4). Local-first: no user data leaves the machine (DATA_PRIVACY.md). ---
   ai:
     ollama:
@@ -45,6 +56,16 @@ spring:
 
 app:
   version: @project.version@
+
+# --- Agent conversation memory bounds (M7). Sliding TTL; two boundaries: storage (what Redis keeps)
+#     and context (the smaller slice rendered into the LLM prompt). See docs/MEMORY.md. ---
+agent:
+  memory:
+    ttl-seconds: ${AGENT_MEMORY_TTL_SECONDS:86400}
+    max-messages: ${AGENT_MEMORY_MAX_MESSAGES:50}
+    max-chars: ${AGENT_MEMORY_MAX_CHARS:12000}
+    context-max-messages: ${AGENT_MEMORY_CONTEXT_MAX_MESSAGES:12}
+    context-max-chars: ${AGENT_MEMORY_CONTEXT_MAX_CHARS:6000}
 
 # --- LLM layer (the app's own keys, kept independent of the spring.ai.* auto-config keys). ---
 llm:

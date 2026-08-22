@@ -24,8 +24,18 @@ class AgentPlannerTest {
         ScriptedLlmClient llm = new ScriptedLlmClient()
                 .enqueueStructured(new AgentDecision(AgentAction.FINAL, "hi", null, null));
         AgentPlanner planner = new AgentPlanner(llm, prompts, validator, catalog);
-        AgentDecision d = planner.decide("hello", List.of(), 8, 10);
+        AgentDecision d = planner.decide("hello", "(none)", List.of(), 8, 10);
         assertThat(d.action()).isEqualTo(AgentAction.FINAL);
+    }
+
+    @Test
+    void rendersBoundedHistory_intoThePrompt() {
+        ScriptedLlmClient llm = new ScriptedLlmClient()
+                .enqueueStructured(new AgentDecision(AgentAction.FINAL, "ok", null, null));
+        AgentPlanner planner = new AgentPlanner(llm, prompts, validator, catalog);
+        planner.decide("which is due first?", "USER: show my high priority tasks", List.of(), 8, 10);
+        assertThat(llm.prompts()).hasSize(1);
+        assertThat(llm.prompts().get(0)).contains("USER: show my high priority tasks");
     }
 
     @Test
@@ -35,7 +45,7 @@ class AgentPlannerTest {
                 new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of()) // valid
         );
         AgentPlanner planner = new AgentPlanner(llm, prompts, validator, catalog);
-        AgentDecision d = planner.decide("show tasks", List.of(), 8, 10);
+        AgentDecision d = planner.decide("show tasks", "(none)", List.of(), 8, 10);
         assertThat(d.action()).isEqualTo(AgentAction.TOOL_CALL);
         assertThat(llm.prompts()).hasSize(2); // one repair
     }
@@ -46,7 +56,7 @@ class AgentPlannerTest {
                 new AgentDecision(AgentAction.FINAL, null, null, null),
                 new AgentDecision(AgentAction.FINAL, null, null, null));
         AgentPlanner planner = new AgentPlanner(llm, prompts, validator, catalog);
-        assertThatThrownBy(() -> planner.decide("x", List.of(), 8, 10))
+        assertThatThrownBy(() -> planner.decide("x", "(none)", List.of(), 8, 10))
                 .isInstanceOf(AgentInvalidDecisionException.class);
     }
 }

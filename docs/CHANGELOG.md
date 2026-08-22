@@ -9,7 +9,30 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 7 — Memory (Redis conversation/session/execution state). Not started._
+_Next: Milestone 8 — Guardrails (hard bounds, confirmation for dangerous ops, rate limiting). Not started._
+
+---
+
+## [0.0.7] — 2026-08-22 — Milestone 7: Redis Conversation Memory
+
+### Added
+- **Memory module** (`com.prince.agentic.memory`): Redis-backed short-term conversation memory, isolated from Spring AI and never accessed by tools. `ConversationMemoryService` abstraction + `RedisConversationMemoryService` (Spring Data Redis / Lettuce, `StringRedisTemplate`); records `ConversationMemory` / `MemoryMessage` / `MemoryRole {USER, ASSISTANT, TOOL}`; pure `MemoryBounds` (deterministic latest-message trimming); `MemoryProperties` (`agent.memory.*`); `MemoryConfig`; exceptions `ConversationNotFoundException` (404), `MemoryUnavailableException` (503).
+- **Storage:** one application-owned JSON blob per conversation under `conv:{userId}:{conversationId}` (server-minted UUIDv4). No Java native serialization, no class-name polymorphic storage; `schemaVersion=1`. Stores user/assistant text + bounded TOOL summaries only — never entities, tokens, or security context.
+- **Bounds & TTL:** storage bound 50 msgs / 12,000 chars; smaller LLM-context bound 12 msgs / 6,000 chars (full history never sent to the model); sliding 24h TTL refreshed each turn. All env-tunable via `AGENT_MEMORY_TTL_SECONDS`/`_MAX_MESSAGES`/`_MAX_CHARS`/`_CONTEXT_MAX_MESSAGES`/`_CONTEXT_MAX_CHARS`.
+- **M6 integration:** `AgentConversationService` wraps the still-Redis-free `AgentOrchestrator` (load bounded history → run → append bounded turn → refresh TTL). New delimited `{history}` slot in `agent-system.st` (untrusted context, not instructions); `AgentPlanner.decide`/`AgentPromptService.render`/`AgentOrchestrator.run` gain a history parameter (stateless M6 entry points preserved).
+- **API (additive, non-breaking):** `POST /api/v1/agent/execute` accepts an optional UUID `conversationId` (absent → new conversation) and returns `conversationId` + `memoryStatus` (`ACTIVE`/`UNAVAILABLE`). New `DELETE /api/v1/agent/conversations/{id}` → 204 (ownership-checked, 404-masked). No conversation-list endpoint.
+- **Metrics:** `memory.load`, `memory.append`, `memory.trim`, `memory.hit`, `memory.miss`, `memory.unavailable`, `agent.conversation` (tagged `memoryStatus`). No raw content or ids in labels/logs.
+- **Tests:** unit (`MemoryPropertiesTest`, `MemoryBoundsTest`, `RedisConversationMemoryServiceTest` over a mocked template incl. malformed-blob/owner-mismatch/unavailable, `AgentConversationServiceTest`, `MemoryArchitectureBoundaryTest`, `FakeConversationMemoryService`); real-Redis Testcontainers (`redis:7-alpine`) `RedisConversationMemoryIT` (round-trip, trim, sliding TTL, real expiration, delete, cross-user isolation, user-scoped key); multi-turn `AgentConversationIT` proving turn 2's prompt contains turn 1's bounded context, plus cross-user 404, backward-compat, and delete-then-reuse. 296 unit + 26 IT (3 live-Ollama skipped) green; overall instruction coverage 93%.
+
+### Changed
+- `AgentResult` carries the run's bounded observations (internal; never exposed by the API DTO) so memory can persist bounded TOOL turns.
+- The shared IT base starts both PostgreSQL and Redis containers, so the `it` profile mirrors production and `/actuator/health` reports UP. The infra-free `test` profile disables only the Redis health indicator (the default indicator stays on in every real profile).
+
+### Security
+- Conversation ownership enforced server-side two ways (userId-scoped key + asserted stored owner); server-minted UUIDs; missing/expired/foreign id → masked 404. Memory content is untrusted and confined to the delimited `{history}` slot — never a replacement system prompt. Identity always from the authenticated principal, never from `conversationId` or the body.
+
+### Docs
+- ADR-0017 (Redis conversation memory architecture), ADR-0018 (retention & bounding), ADR-0019 (failure semantics), ADR-0020 (ownership & isolation). Updated `MEMORY.md`, `API.md`, `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `TESTING.md`, `DEPLOYMENT.md`, `TECH_STACK.md`, `GUARDRAILS.md`, `AUDIT_LOGGING.md`, `ROADMAP.md`, `.env.example`, `README.md`, `backend/README.md`.
 
 ---
 

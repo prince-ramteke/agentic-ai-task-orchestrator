@@ -162,3 +162,19 @@ The agent treats the LLM as an **untrusted planner**; the backend stays authorit
 | Repeated/looping calls, timeout, cancellation | `LoopDetector` + iteration/tool-call budgets + one deadline + cancellation seam. |
 
 Identity flows only from `@AuthenticationPrincipal`; every effect flows through the M5 `ToolExecutor`; side-effecting tools are never auto-retried. **Hard** confirmation/rate-limiting is M8.
+
+## Milestone 7 — Conversation memory isolation (IMPLEMENTED)
+
+Redis conversation memory preserves every M2–M6 boundary and adds its own (ADR-0020):
+
+- **Server-minted UUIDv4** `conversationId` — unguessable, non-enumerable. Clients never mint ids.
+- **Two-layer ownership:** the Redis key is namespaced by the authenticated user id
+  (`conv:{userId}:{conversationId}`) **and** the stored `ownerUserId` is asserted equal to the principal
+  on load. A missing / expired / non-owned id → masked **404** `CONVERSATION_NOT_FOUND` (no existence leak).
+- **Identity is never taken from `conversationId` or the request body** — always the Spring Security
+  principal (`@AuthenticationPrincipal`).
+- **Untrusted memory content:** stored user text lives only in the delimited `{history}` prompt slot,
+  explicitly marked as context, never instructions — it cannot become a replacement system prompt.
+  Memory poisoning is bounded here and remains a guardrail concern for M8.
+- **No secrets in memory:** never JWTs, security context, or raw entities. No debug/get-key endpoint;
+  no conversation-listing endpoint. Raw conversation content is never logged. `REDIS_PASSWORD` in non-dev.

@@ -1,6 +1,6 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 6** it provides the backend foundation, the
+Spring Boot backend module. Through **Milestone 7** it provides the backend foundation, the
 authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
 domains (CRUD, ownership, pagination, PostgreSQL), the **LLM foundation** (`LlmClient` over local
 **Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), the **tool framework** — a
@@ -9,9 +9,13 @@ with six least-privilege tools and an ADMIN `/api/v1/tools` catalog — and, as 
 `AgentOrchestrator`, a bounded, backend-controlled loop (`com.prince.agentic.agent`) that drives the
 M5 `ToolExecutor` from a validated, LLM-produced `AgentDecision`, exposed at `POST /api/v1/agent/execute`.
 The LLM is an untrusted planner; identity is always the authenticated principal; the run is bounded by
-cooperative iteration/tool-call budgets, one deadline, a cancellation seam, and loop detection.
-**Hard** guardrails/confirmation/rate-limiting are **M8**; Redis memory **M7**; durable audit **M9**
-(see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+cooperative iteration/tool-call budgets, one deadline, a cancellation seam, and loop detection. As of
+**M7**, `AgentConversationService` (`com.prince.agentic.memory` + `agent`) adds **Redis conversation
+memory**: bounded per-user JSON-blob context under `conv:{userId}:{conversationId}` with a sliding 24h
+TTL, injected into a delimited `{history}` prompt slot — the orchestrator itself stays Redis-free.
+`POST /api/v1/agent/execute` takes an optional `conversationId` and returns `conversationId`/`memoryStatus`;
+`DELETE /api/v1/agent/conversations/{id}` deletes a conversation. **Hard** guardrails/confirmation/
+rate-limiting are **M8**; durable audit **M9** (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -110,7 +114,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-The agent runtime and Spring AI tool-calling adapter (M6), Redis (M7), guardrails/confirmation (M8), durable agent/tool audit (M9), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (The M5 tool framework landed with **no new dependencies** — the deterministic tools only; the agent that drives them is M6.)
+Guardrails/confirmation/rate-limiting (M8), durable agent/tool audit (M9), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests.)
 
 ## Docker
 

@@ -23,14 +23,20 @@ public class AgentPromptService {
     // No-arg constructor for unit tests that don't load the classpath resource.
     AgentPromptService() { this.template = defaultTemplate(); }
 
-    public String render(String userMessage, String toolCatalog, List<AgentObservation> observations,
-                         int iterationsLeft, int toolCallsLeft) {
+    public String render(String userMessage, String history, String toolCatalog,
+                         List<AgentObservation> observations, int iterationsLeft, int toolCallsLeft) {
         return template
                 .replace("{tools}", safe(toolCatalog))
+                .replace("{history}", renderHistory(history))
                 .replace("{request}", safe(userMessage))
                 .replace("{observations}", renderObservations(observations))
                 .replace("{iterationsLeft}", Integer.toString(iterationsLeft))
                 .replace("{toolCallsLeft}", Integer.toString(toolCallsLeft));
+    }
+
+    /** Prior-turn context in the delimited slot only. Blank/absent memory renders as "(none)". */
+    private String renderHistory(String history) {
+        return (history == null || history.isBlank()) ? "(none)" : history;
     }
 
     private String renderObservations(List<AgentObservation> obs) {
@@ -52,7 +58,7 @@ public class AgentPromptService {
     }
 
     private String defaultTemplate() {
-        return "TOOLS:\n{tools}\nREQUEST:\n{request}\nOBS:\n{observations}\n"
+        return "TOOLS:\n{tools}\nHISTORY:\n{history}\nREQUEST:\n{request}\nOBS:\n{observations}\n"
              + "left it={iterationsLeft} tc={toolCallsLeft}";
     }
 }

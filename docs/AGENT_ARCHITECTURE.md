@@ -10,10 +10,17 @@
 > `com.prince.agentic.tool`: `Tool<I,O>`, `ToolRegistry`, `ToolExecutor`, `ToolExecutionContext`, six
 > registered tools wrapping the M3 domain services).
 >
-> Still **planned**: Redis conversation/session memory (M7); **hard** guardrail enforcement, the
+> **Implemented in M7:** Redis-backed **conversation memory** — `AgentConversationService` wraps the
+> (still Redis-free) `AgentOrchestrator`: it loads bounded prior-turn history, runs the loop with that
+> history injected via a delimited `{history}` prompt slot, then appends the bounded turn (USER +
+> bounded TOOL summaries + ASSISTANT) under a sliding 24h TTL. `POST /api/v1/agent/execute` takes an
+> optional server-minted UUID `conversationId` and returns `conversationId` + `memoryStatus`; ownership
+> is enforced server-side (missing/foreign/expired → masked 404). See `MEMORY.md` and ADR-0017…0020.
+>
+> Still **planned**: session/execution-state + cache Redis rows; **hard** guardrail enforcement, the
 > human-confirmation workflow, hard timeout/interruption, and rate limiting (M8); durable audit tables
-> and a `GET` execution-retrieval endpoint (M9). Where sections below describe Redis-backed state,
-> confirmation, or durable execution records, treat those as the M7–M9 target, not current behavior.
+> and a `GET` execution-retrieval endpoint (M9). Where sections below describe confirmation or durable
+> execution records, treat those as the M8–M9 target, not current behavior.
 >
 > **Foundational invariant (must hold through M6+):** the agent may never reach a repository,
 > `EntityManager`, arbitrary method, or code. Its only path to effects is:

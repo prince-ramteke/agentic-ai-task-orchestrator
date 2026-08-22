@@ -83,6 +83,14 @@
             <artifactId>spring-ai-starter-model-ollama</artifactId>
         </dependency>
 
+        <!-- === Milestone 7: Redis conversation memory ===
+             Ephemeral, bounded, TTL'd conversation context (Lettuce, via Spring Boot auto-config).
+             Never a replacement for PostgreSQL; no durable data lives only in Redis (docs/MEMORY.md). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- === Milestone 2: Authentication & Authorization === -->
 
         <!-- Spring Security (JWT auth, RBAC, method security) -->
@@ -167,11 +175,16 @@
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- M7: real-Redis integration tests via a generic redis:7-alpine container (no dedicated
+             Testcontainers module needed). Skips cleanly without Docker, like the *IT PostgreSQL tests. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <!--
           Still deliberately NOT added (arrive with the milestone that needs them):
-            - spring-boot-starter-data-redis      (M7 — conversation/session memory)
-            - spring-ai-*                         (M4 — LLM integration)
             - kafka / prometheus / grafana infra  (later milestones)
           Persistence (JPA/PostgreSQL/Flyway) and Spring Security were added in M2 because
           the authentication domain genuinely requires them (supersedes ADR-0002 for security data).
@@ -262,6 +275,8 @@
                         <exclude>com/prince/agentic/ai/llm/ollama/**</exclude>
                         <!-- M5: thin tool catalog controller/DTOs (covered by ToolCatalogApiTest, not unit logic). -->
                         <exclude>com/prince/agentic/tool/api/**</exclude>
+                        <!-- M7: memory wiring (config only; the service/bounds/model ARE unit-tested). -->
+                        <exclude>com/prince/agentic/memory/MemoryConfig.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>

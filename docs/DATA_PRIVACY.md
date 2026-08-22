@@ -61,3 +61,17 @@ Deletion/export of a user's data (tasks, customers, execution history) is a plan
 ## 8. Testing
 
 Assert that no secret/PII appears in logs, audit records, or outbound requests; that external calls are gated by the fallback flag; and that redaction is applied on sensitive fields (`TESTING.md`).
+
+## Milestone 7 — Conversation memory (IMPLEMENTED)
+
+- **What is stored:** per conversation, the user's messages, the assistant's final responses, and
+  bounded tool-result summaries — as one JSON blob under `conv:{userId}:{conversationId}`. **Never**
+  passwords, tokens, security context, or full entity graphs.
+- **Why:** short-term dialogue continuity so a user can follow up on a prior turn.
+- **Retention:** sliding 24h TTL (`AGENT_MEMORY_TTL_SECONDS`), refreshed on each turn; idle
+  conversations expire automatically. Bounded to 50 msgs / 12,000 chars (older content trimmed).
+- **Ownership & deletion:** a conversation is readable only by its owner; `DELETE
+  /api/v1/agent/conversations/{id}` lets a user delete their own memory immediately. Redis holds no
+  durable record — losing it loses only convenience (durable audit is the separate M9 concern).
+- **Logging:** conversation content is never logged; metrics carry only counts/sizes and status, never
+  raw text or ids.

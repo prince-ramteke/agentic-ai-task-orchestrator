@@ -56,13 +56,28 @@ public class AgentOrchestrator {
         this.mapper = mapper;
     }
 
-    /** Public entry point: no external cancellation source (M8 not wired yet). */
+    /** Public entry point: stateless (no conversation history), no external cancellation source. */
     public AgentResult run(AuthenticatedUser principal, String message) {
-        return run(principal, message, () -> false);
+        return run(principal, message, "");
     }
 
-    /** Package-private overload carrying the external cancellation seam (spec ruling R-B). */
+    /**
+     * Public entry point carrying bounded prior-conversation context (M7). {@code historyContext} is
+     * an already-rendered, already-bounded string supplied by the memory layer; the orchestrator
+     * treats it as opaque untrusted text and never touches Redis itself.
+     */
+    public AgentResult run(AuthenticatedUser principal, String message, String historyContext) {
+        return run(principal, message, historyContext, () -> false);
+    }
+
+    /** Package-private overload carrying only the external cancellation seam (spec ruling R-B). */
     AgentResult run(AuthenticatedUser principal, String message, CancellationToken external) {
+        return run(principal, message, "", external);
+    }
+
+    /** Package-private core: bounded history + external cancellation seam. */
+    AgentResult run(AuthenticatedUser principal, String message, String historyContext,
+                    CancellationToken external) {
         String executionId = UUID.randomUUID().toString();
         String requestId = UUID.randomUUID().toString();
         AgentExecution ex = new AgentExecution(executionId, principal, requestId, clock, props);
@@ -84,7 +99,7 @@ public class AgentOrchestrator {
 
                 AgentDecision decision;
                 try {
-                    decision = planner.decide(message, ex.observations(),
+                    decision = planner.decide(message, historyContext, ex.observations(),
                             props.maxIterations() - ex.iteration(), props.maxToolCalls() - ex.toolCallsUsed());
                 } catch (AgentInvalidDecisionException e) {
                     return terminate(ex, AgentStatus.FAILED, "AGENT_INVALID_DECISION", null);
@@ -127,7 +142,7 @@ public class AgentOrchestrator {
         log.info("agent.run executionId={} status={} iterations={} toolCalls={} durationMs={}",
                 ex.executionId(), status, ex.iteration(), ex.toolCallsUsed(), ms);
         return new AgentResult(ex.executionId(), status, response,
-                ex.iteration(), ex.toolCallsUsed(), ms, failureCode);
+                ex.iteration(), ex.toolCallsUsed(), ms, failureCode, ex.observations());
     }
 
     private void limitMetric(String limit) {

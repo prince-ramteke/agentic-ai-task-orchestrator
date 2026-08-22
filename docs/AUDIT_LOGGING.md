@@ -55,3 +55,10 @@ Assert that: every side-effecting tool call produces an audit record with the re
 ## Milestone 6 — Agent logging (durable audit still M9)
 
 M6 emits structured SLF4J logs and Micrometer metrics keyed by `executionId`/`requestId` (decision action, chosen tool name, status, iterations, tool calls, duration) — never full prompts, arguments, or observations. There are **no** durable audit tables yet: `agent_executions`, `agent_steps`, and `tool_executions`, plus the `GET /api/v1/agent/executions/{id}` retrieval endpoint, are **M9**.
+
+## Milestone 7 — Memory is not audit
+
+Redis conversation **memory** (M7) is short-lived context for future model reasoning; it expires by TTL
+and is best-effort. Durable agent **audit** — a permanent, queryable record of what actually happened —
+is the separate **M9 (PLANNED)** concern backed by PostgreSQL. Do not treat memory as audit: memory may
+vanish on expiry or a Redis outage without any correctness impact.

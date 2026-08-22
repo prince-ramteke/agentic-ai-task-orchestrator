@@ -64,3 +64,11 @@ Guardrails wrap the decision loop (`AGENT_ARCHITECTURE.md` §3). Before each ste
 ## 6. Testing
 
 Each guardrail has a test proving it trips (`TESTING.md`): budget exhaustion, timeout, retry cap, loop detection, validation/authorization refusal, confirmation-required, rate limit, and cancellation. There must be **no code path that allows unbounded execution**.
+
+## Milestone 7 — Memory boundary note
+
+M7 adds Redis conversation memory but **not** guardrails. Memory content is untrusted context confined
+to a delimited prompt slot (never a replacement system prompt), and conversation size is bounded, but
+**hard** guardrail enforcement, human confirmation for dangerous operations, hard timeout/interruption,
+and rate limiting remain **M8 (PLANNED)**. Prompt-injection via stored memory is bounded here and is an
+explicit M8 concern.
