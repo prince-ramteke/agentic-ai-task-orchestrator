@@ -1,6 +1,6 @@
 # Backend — Agentic AI Task Orchestrator
 
-Spring Boot backend module. Through **Milestone 7** it provides the backend foundation, the
+Spring Boot backend module. Through **Milestone 9** it provides the backend foundation, the
 authentication & authorization boundary (JWT, BCrypt, RBAC), the user-owned **Task**/**Customer**
 domains (CRUD, ownership, pagination, PostgreSQL), the **LLM foundation** (`LlmClient` over local
 **Ollama** via **Spring AI 1.0.9**, `AiService`, `/api/v1/ai/*`), the **tool framework** — a
@@ -19,8 +19,13 @@ TTL, injected into a delimited `{history}` prompt slot — the orchestrator itse
 (ordered risk/argument policies) gates every action before `ToolExecutor`; SIDE_EFFECTING/HIGH_RISK
 actions halt at `PENDING_CONFIRMATION` and run **exactly once** via a single-use, fingerprint-bound
 Redis confirmation (`POST`/`DELETE /api/v1/agent/confirmations/{id}`); a per-user fixed-window
-`RedisRateLimiter` caps tool calls; timeouts are layered and never force-cancel a write. Durable audit
-is **M9**; observability dashboards **M10** (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
+`RedisRateLimiter` caps tool calls; timeouts are layered and never force-cancel a write. As of **M9**,
+the `com.prince.agentic.audit` package adds a **durable, owner-scoped audit trail** (Flyway `V5`:
+`agent_executions`/`agent_steps`/`tool_executions`): the orchestrator + confirm service emit
+backend-observed facts through a repository-free `AgentExecutionListener` (no-op default) to a
+best-effort `AuditService` (`REQUIRES_NEW`, idempotent, never blocks the run), read back via
+`GET /api/v1/agent/executions[/{executionId}]` (paginated, sanitized — no raw prompts/args/output/
+chain-of-thought/secrets). Observability dashboards are **M10** (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)).
 
 ## Requirements
 
@@ -119,7 +124,7 @@ Configuration: `src/main/resources/application.yml` (+ `-local`, `-test` profile
 
 ## Deliberately not present yet
 
-Durable agent/tool audit (M9), observability dashboards (M10), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests. **M8 added no new dependencies** — guardrails/confirmation/rate-limiting reuse Spring, Jackson, the M7 Redis template, and `java.security.MessageDigest`.)
+Observability dashboards (M10), retention purge enforcement (M10+), a cloud fallback provider (future). Dependencies are added by the milestone that needs them. (M7 added `spring-boot-starter-data-redis` for conversation memory and `org.testcontainers:testcontainers` for the real-Redis integration tests. **M8 and M9 added no new dependencies** — guardrails/confirmation/rate-limiting reuse Spring, Jackson, the M7 Redis template, and `java.security.MessageDigest`; durable audit reuses Spring Data JPA, Flyway, and the M8 `FingerprintService`.)
 
 ## Docker
 

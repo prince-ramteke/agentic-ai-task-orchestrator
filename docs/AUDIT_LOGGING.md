@@ -69,3 +69,22 @@ M8 emits structured guardrail logs (decision, reasonCode, policyId, execution/re
 redacted) and low-cardinality guardrail metrics, and keeps short-lived confirmation/rate state in Redis
 with TTLs. M8 deliberately creates **no durable audit tables** (`agent_executions`, `tool_executions`,
 `agent_steps`) — persistent, queryable audit records remain **M9 (PLANNED)**.
+
+## Milestone 9 — Durable agent audit (IMPLEMENTED)
+
+M9 makes this real. Three typed tables (`agent_executions`, `agent_steps`, `tool_executions` — **no**
+generic `audit_events` table) durably record backend-observed facts: execution lifecycle, LLM-decision
+metadata, guardrail outcomes, confirmation required/approved, and tool execution outcomes — written via
+a repository-free `AgentExecutionListener` seam, never by the LLM, never reconstructed from prompts.
+
+**Supersedes §5 (admin retrieval):** M9 ships **owner-scoped only** — `GET /api/v1/agent/executions`
+and `/{executionId}` return the caller's own executions (USER and ADMIN alike); a foreign/missing id is
+masked 404. An explicit RBAC-gated admin cross-user endpoint is a documented **later** decision (no
+cross-user data path ships in M9).
+
+**Writes** are best-effort in their own `REQUIRES_NEW` transactions, idempotent (UNIQUE natural keys),
+and never block or roll back the agent/domain path — a business action can succeed while its audit row
+is temporarily missing (recorded as `audit.write.failure`). **Never stored:** raw prompts, tool
+arguments, LLM output, system prompts, chain-of-thought, or secrets — only metadata, `arguments_hash`
+(SHA-256), and bounded summaries. Retention horizon `AGENT_AUDIT_RETENTION_DAYS` (default 90) is
+documented; **no purge scheduler in M9**. Dashboards are **M10 (PLANNED)**. See ADR-0026…0029.

@@ -85,3 +85,14 @@ secrets, or security context. Client-facing responses expose only a safe confirm
 (confirmationId, tool, riskLevel, summary, expiresAt) — never internal class names, fingerprints, raw
 arguments, or prompt content. Guardrail metrics/logs carry no raw arguments or user text. See
 `GUARDRAILS.md`, ADR-0024.
+
+## Milestone 9 — Durable audit data (IMPLEMENTED)
+
+The agent audit tables (`agent_executions`/`agent_steps`/`tool_executions`) store the **minimum** needed
+to reconstruct what happened: ids, status/outcome, tool name, risk level, error codes, counts,
+durations/timestamps, correlation ids, an `arguments_hash` (SHA-256 of canonical args), and
+length-capped, redacted summaries (`final_response_summary`, `result_summary`; caps via `audit.*`).
+**Never stored:** raw prompts, raw tool arguments, raw tool results, system prompts, hidden reasoning /
+**chain-of-thought**, JWTs, passwords, or secrets. `conversation_id` is stored as a correlation id only
+— never the Redis memory blob. Read APIs return sanitized DTOs. Retention is durable with a documented
+horizon (`AGENT_AUDIT_RETENTION_DAYS`, default 90); no automated purge in M9. See ADR-0028.

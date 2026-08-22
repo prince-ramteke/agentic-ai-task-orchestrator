@@ -63,7 +63,9 @@ public class DefaultGuardrailEngine implements GuardrailEngine {
                 return record(d, decision.tool(), descriptor.risk().name());
             }
         }
-        return record(GuardrailDecision.allow(), decision.tool(), descriptor.risk().name());
+        // ALLOW enriched with the resolved risk so the caller can audit the executed tool's risk.
+        return record(GuardrailDecision.allowWithRisk(descriptor.risk()), decision.tool(),
+                descriptor.risk().name());
     }
 
     private GuardrailDecision record(GuardrailDecision d, String tool, String risk) {

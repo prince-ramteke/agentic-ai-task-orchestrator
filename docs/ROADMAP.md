@@ -16,7 +16,7 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 | 6 | Agent Orchestration | ⬜ |
 | 7 | Memory | ⬜ |
 | 8 | Guardrails | ✅ |
-| 9 | Auditing | ⬜ |
+| 9 | Auditing | ✅ |
 | 10 | Observability | ⬜ |
 | 11 | Testing & Evaluation | ⬜ |
 | 12 | Docker & Deployment | ⬜ |
@@ -104,13 +104,15 @@ Milestone-based, dependency-ordered. Each milestone defines: **objective · prer
 - **Docs:** `GUARDRAILS.md`, `SECURITY.md`, `AGENT_ARCHITECTURE.md`, `TOOL_SYSTEM.md`, `MEMORY.md`, `OBSERVABILITY.md`, `API.md`, `PERFORMANCE.md`, `DATA_PRIVACY.md`, `TESTING.md`, `TECH_STACK.md`, `CHANGELOG.md`, ADR-0021…0025.
 - **DoD:** no unbounded execution path; no effect before guardrail evaluation; confirmation single-use and fingerprint-bound.
 
-### Milestone 9 — Auditing ⬜
-- **Objective:** Durable, queryable audit trail of agent decisions, tool executions, side effects, and confirmations.
-- **Prerequisites:** M6, M5.
-- **Outputs:** audit persistence; `GET /api/agent/executions/{id}`; admin inspection endpoints; redaction of sensitive fields.
-- **Validation:** every side-effecting tool call produces an audit record; admin can retrieve; no secrets/PII in audit.
-- **Docs:** `AUDIT_LOGGING.md`, `DATA_PRIVACY.md`, `API.md`, `CHANGELOG.md`.
-- **DoD:** who/what/when/which-tool/result present per event.
+### Milestone 9 — Auditing ✅
+- **Objective:** Durable, queryable, owner-scoped audit trail of agent executions, steps (LLM decisions, guardrail outcomes, confirmations), and tool executions — written from backend-observed facts, never the LLM.
+- **Prerequisites:** M6, M5, M8.
+- **Delivered (IMPLEMENTED + VERIFIED 2026-08-22):** `com.prince.agentic.audit` package — Flyway `V5` three typed tables (`agent_executions`/`agent_steps`/`tool_executions`, UUID natural keys, owner FK CASCADE, CHECK-constrained enums, indexes); JPA entities + repositories; a repository-free `AgentExecutionListener` seam (no-op default) emitted by the orchestrator + confirm service via `AgentAuditEmitter`; best-effort `AuditService`/`AuditWriter` (`REQUIRES_NEW`, idempotent, swallow-on-failure + `audit.write.failure`); read API `GET /api/v1/agent/executions[/{id}]` (owner-scoped, paginated via JPA Specifications, sanitized DTOs); `AuditProperties` (`audit.*`); `audit.*` metrics.
+- **Validation (VERIFIED 2026-08-22):** unit + integration green (`./mvnw verify`); `AgentAuditE2EIT` proves agent→guardrail→tool→audit→PostgreSQL and the confirm flow (PENDING_CONFIRMATION → confirm → CONFIRMATION_APPROVED step + tool execution + promotion) with owner isolation; `AgentAuditPersistenceIT` covers round-trip/idempotency/UNIQUE/owner-filter/pagination; security tests prove cross-user 404 masking and that **no raw prompt/argument/output/chain-of-thought/secret is stored or returned**. JaCoCo gate (≥0.75) held.
+- **Privacy:** metadata + hashes (`arguments_hash`) + bounded, length-capped summaries only; **no chain-of-thought** ever. Best-effort semantics documented (a business action can succeed while its audit row is temporarily missing, recorded as a metric).
+- **Boundary:** observability dashboards, aggregation/alerting, and the retention **purge scheduler** are **M10+ (PLANNED)**; admin cross-user audit is explicitly deferred.
+- **Docs:** `AUDIT_LOGGING.md`, `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `API.md`, `DATABASE.md`, `TESTING.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `TECH_STACK.md`, `CHANGELOG.md`, ADR-0026…0029.
+- **DoD:** who/what/when/which-tool/result present per event; owner-scoped; idempotent; no secrets/PII/chain-of-thought.
 
 ### Milestone 10 — Observability ⬜
 - **Objective:** Metrics + structured logging + dashboards for backend and agent/tool execution.

@@ -127,3 +127,12 @@ per-user rate-limit → execute. On confirmation, `AgentConfirmationService` exe
 action **exactly once** through the same `ToolExecutor` gates, with **no automatic LLM-loop resume**.
 The orchestrator stays Redis-free and repository-free, depending only on the `GuardrailEngine` /
 `RateLimiter` abstractions. See ADR-0021/0022, `GUARDRAILS.md`.
+
+## Milestone 9 — Durable audit seam (IMPLEMENTED)
+
+The orchestrator now emits backend-observed facts at each lifecycle point (start · LLM decision ·
+guardrail · tool execution · confirmation-required · final · failure · completion) through a
+repository-free `AgentExecutionListener` (no-op default) via `AgentAuditEmitter`. The confirm service
+emits a `CONFIRMATION_APPROVED` step + tool execution and promotes the run `PENDING_CONFIRMATION →
+COMPLETED/FAILED`. The agent core stays JPA-free and repository-free (audit → agent, one-way); audit
+persistence is best-effort and off the decision path (ADR-0026/0027). See `AUDIT_LOGGING.md`.

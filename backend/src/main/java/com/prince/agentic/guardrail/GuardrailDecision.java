@@ -32,6 +32,15 @@ public record GuardrailDecision(
         return new GuardrailDecision(GuardrailOutcome.ALLOW, "ALLOWED", null, null, null);
     }
 
+    /**
+     * ALLOW enriched with the tool's descriptor risk (M9 audit): the outcome is identical to
+     * {@link #allow()}, but the resolved {@link ToolRiskLevel} is carried through so a caller can
+     * record the executed tool's risk without re-resolving the descriptor.
+     */
+    public static GuardrailDecision allowWithRisk(ToolRiskLevel riskLevel) {
+        return new GuardrailDecision(GuardrailOutcome.ALLOW, "ALLOWED", null, riskLevel, null);
+    }
+
     public static GuardrailDecision deny(String reasonCode, String message, String policyId) {
         return new GuardrailDecision(GuardrailOutcome.DENY, reasonCode, message, null, policyId);
     }

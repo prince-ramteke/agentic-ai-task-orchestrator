@@ -59,7 +59,7 @@ public class AgentConversationService {
         ConversationMemory memoryState = memory.startOrLoad(principal, conversationId);
 
         String history = memory.renderContext(memoryState);
-        AgentResult result = orchestrator.run(principal, message, history);
+        AgentResult result = orchestrator.run(principal, message, history, memoryState.conversationId());
 
         // M8: a halted side-effecting action is stored as a fingerprint-bound confirmation, keyed by
         // the (verified) principal and THIS conversation id — never by any client/model claim.

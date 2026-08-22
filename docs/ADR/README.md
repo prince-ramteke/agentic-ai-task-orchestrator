@@ -72,12 +72,18 @@ Related ADRs, docs, issues.
 | ADR-0023 | Layered timeout strategy | M8 | Accepted |
 | ADR-0024 | Confirmation integrity / action fingerprinting | M8 | Accepted |
 | ADR-0025 | Per-user fixed-window rate limiting | M8 | Accepted |
+| ADR-0026 | Durable agent audit model (3 typed tables) | M9 | Accepted |
+| ADR-0027 | Audit transaction & failure semantics | M9 | Accepted |
+| ADR-0028 | Audit payload privacy strategy | M9 | Accepted |
+| ADR-0029 | Agent execution history API | M9 | Accepted |
 
 ## Planned ADR topics (numbers assigned only when the decision is actually made)
 
 | Topic | Expected milestone |
 |---|---|
-| Durable audit persistence (agent/tool execution records) | M9 |
+| Observability dashboards / metric-trace model | M10 |
+| Audit retention purge enforcement | M10+ |
+| Admin cross-user audit visibility | later (explicit decision) |
 
 These are *planned topics*, not decisions. A new ADR file gets the next free number
 when the decision is made; existing numbers are never renumbered or reused.

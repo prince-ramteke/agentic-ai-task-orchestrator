@@ -75,6 +75,14 @@ guardrail:
   user-tool-budget-per-min: ${AGENT_USER_TOOL_BUDGET_PER_MIN:60}
   max-argument-chars: ${AGENT_MAX_ARGUMENT_CHARS:4000}
 
+# --- Durable agent audit (M9): PostgreSQL execution history. retention-days documents the intended
+#     horizon only; NO purge scheduler runs in M9. Summaries are length-capped (redacted). See
+#     docs/AUDIT_LOGGING.md. ---
+audit:
+  retention-days: ${AGENT_AUDIT_RETENTION_DAYS:90}
+  final-summary-max-chars: ${AGENT_AUDIT_FINAL_SUMMARY_MAX_CHARS:500}
+  result-summary-max-chars: ${AGENT_AUDIT_RESULT_SUMMARY_MAX_CHARS:500}
+
 # --- LLM layer (the app's own keys, kept independent of the spring.ai.* auto-config keys). ---
 llm:
   provider: ${LLM_PROVIDER:ollama}          # ollama (only wired provider in M4; openai is future/not wired)

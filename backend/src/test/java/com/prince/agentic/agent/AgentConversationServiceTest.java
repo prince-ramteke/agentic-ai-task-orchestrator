@@ -55,11 +55,11 @@ class AgentConversationServiceTest {
 
     @Test
     void pendingConfirmation_createsFingerprintBoundConfirmation_forThisConversation() {
-        PendingAction pending = new PendingAction("task.create",
+        PendingAction pending = new PendingAction("exec-9", "task.create",
                 java.util.Map.of("title", "review the report"), ToolRiskLevel.SIDE_EFFECTING);
         AgentResult pendingResult = new AgentResult("exec-9", AgentStatus.PENDING_CONFIRMATION, null,
                 1, 0, 3L, "CONFIRMATION_REQUIRED", List.of(), pending);
-        when(orchestrator.run(eq(USER), eq("create a task"), anyString())).thenReturn(pendingResult);
+        when(orchestrator.run(eq(USER), eq("create a task"), anyString(), any())).thenReturn(pendingResult);
         PendingConfirmation created = new PendingConfirmation("conf-1", "task.create",
                 ToolRiskLevel.SIDE_EFFECTING, "Run tool 'task.create' (SIDE_EFFECTING).", NOW.plusSeconds(300));
         when(confirmations.create(eq(USER), anyString(), eq(pending))).thenReturn(created);
@@ -79,7 +79,7 @@ class AgentConversationServiceTest {
 
     @Test
     void newConversation_mintsId_active_andPersistsUserAndAssistant() {
-        when(orchestrator.run(eq(USER), eq("hi"), anyString()))
+        when(orchestrator.run(eq(USER), eq("hi"), anyString(), any()))
                 .thenReturn(result("hello", List.of()));
 
         ConversationOutcome outcome = service.execute(USER, "hi", null);
@@ -103,7 +103,7 @@ class AgentConversationServiceTest {
         String cid = seed.conversationId();
 
         ArgumentCaptor<String> history = ArgumentCaptor.forClass(String.class);
-        when(orchestrator.run(eq(USER), eq("which is due first?"), history.capture()))
+        when(orchestrator.run(eq(USER), eq("which is due first?"), history.capture(), any()))
                 .thenReturn(result("Task A.", List.of()));
 
         ConversationOutcome outcome = service.execute(USER, "which is due first?", cid);
@@ -115,7 +115,7 @@ class AgentConversationServiceTest {
 
     @Test
     void toolObservations_arePersistedAsBoundedToolMessages() {
-        when(orchestrator.run(eq(USER), eq("find tasks"), anyString()))
+        when(orchestrator.run(eq(USER), eq("find tasks"), anyString(), any()))
                 .thenReturn(result("done", List.of(
                         new AgentObservation("task.search", true, "found 3 tasks", null))));
 
@@ -131,7 +131,7 @@ class AgentConversationServiceTest {
 
     @Test
     void newConversation_appendUnavailable_degradesToStateless() {
-        when(orchestrator.run(eq(USER), eq("hi"), anyString()))
+        when(orchestrator.run(eq(USER), eq("hi"), anyString(), any()))
                 .thenReturn(result("hello", List.of()));
         memory.setAvailable(false); // startOrLoad(new) mints without Redis; append will fail
 

@@ -86,3 +86,13 @@ the M7 `StringRedisTemplate` (Lettuce), and `java.security.MessageDigest` for fi
 migration, no new datastore.** Confirmation and rate state reuse Redis under separate namespaces
 (`guard:confirmation:{id}`, `guard:rate:{userId}:{epochMinute}`). Spring Boot stays **3.4.1**. See
 ADR-0021…0025.
+
+## Milestone 9 — Durable Agent Audit (no new dependencies)
+
+M9 added the `com.prince.agentic.audit` package (Flyway `V5` three-table schema, JPA entities +
+repositories, a repository-free `AgentExecutionListener` seam, best-effort `AuditService`/`AuditWriter`,
+and the read API) using **only existing dependencies**: Spring Web/Data JPA/Validation, Jackson,
+Micrometer, Flyway, the M8 `FingerprintService` (for `arguments_hash`), and JUnit
+5/Mockito/Testcontainers for tests. **No new runtime or test dependency, no Hibernate Envers, no
+Kafka/Elasticsearch, no new datastore** — audit is durable PostgreSQL alongside the existing domain
+tables. Spring Boot stays **3.4.1**. See ADR-0026…0029.

@@ -12,6 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Instant;
+
 /**
  * Executes a confirmed side-effecting action exactly once (spec §6.4). Order (spec §25):
  * rate-limit → single-use consume → execute through the <em>same</em> {@link ToolExecutor} gates
@@ -31,13 +34,18 @@ public class AgentConfirmationService {
     private final RateLimiter rateLimiter;
     private final ToolExecutor toolExecutor;
     private final ObservationSerializer observations;
+    private final AgentAuditEmitter audit;
+    private final Clock clock;
 
     public AgentConfirmationService(ConfirmationService confirmations, RateLimiter rateLimiter,
-                                    ToolExecutor toolExecutor, ObservationSerializer observations) {
+                                    ToolExecutor toolExecutor, ObservationSerializer observations,
+                                    AgentAuditEmitter audit, Clock clock) {
         this.confirmations = confirmations;
         this.rateLimiter = rateLimiter;
         this.toolExecutor = toolExecutor;
         this.observations = observations;
+        this.audit = audit;
+        this.clock = clock;
     }
 
     public AgentConfirmationOutcome confirm(AuthenticatedUser principal, String confirmationId) {
@@ -47,9 +55,16 @@ public class AgentConfirmationService {
         // Single-use consume; throws (NOT_FOUND/EXPIRED/MISMATCH/ALREADY_USED) on anything invalid.
         ConfirmedAction action = confirmations.confirm(principal, confirmationId);
 
+        Instant start = clock.instant();
         ToolExecutionContext ctx = ToolExecutionContext.forPrincipal(principal);
         ToolResult<Object> result = toolExecutor.execute(action.toolName(), action.arguments(), ctx);
+        Instant end = clock.instant();
         AgentObservation obs = observations.toObservation(result);
+
+        // Audit the confirmed execution against the originating run (best-effort; never blocks).
+        audit.confirmationExecuted(action.executionId(), confirmationId, action.toolName(),
+                action.riskLevel(), action.arguments(), obs.success(), obs.errorCode(),
+                obs.resultSummary(), start, end);
 
         log.info("agent.confirmation.executed id={} tool={} success={} user={}",
                 confirmationId, action.toolName(), obs.success(), principal.userId());

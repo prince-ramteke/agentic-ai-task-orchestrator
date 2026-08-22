@@ -73,8 +73,8 @@ public class RedisConfirmationService implements ConfirmationService {
         String fingerprint = fingerprints.fingerprint(
                 principal.userId(), conversationId, action.tool(), canonicalArgs, action.riskLevel());
 
-        Confirmation c = new Confirmation(id, principal.userId(), conversationId, action.tool(),
-                action.arguments(), action.riskLevel(), fingerprint,
+        Confirmation c = new Confirmation(id, principal.userId(), conversationId, action.executionId(),
+                action.tool(), action.arguments(), action.riskLevel(), fingerprint,
                 now.toEpochMilli(), expiresAt.toEpochMilli());
 
         redis.opsForValue().set(key(id), serialize(c), Duration.ofSeconds(ttl));
@@ -124,7 +124,7 @@ public class RedisConfirmationService implements ConfirmationService {
         meters.counter("guardrail.confirmation_approved", "riskLevel", c.riskLevel().name()).increment();
         log.info("guardrail.confirmation.approved id={} tool={} user={}",
                 confirmationId, c.toolName(), principal.userId());
-        return new ConfirmedAction(c.toolName(), c.arguments(), c.riskLevel());
+        return new ConfirmedAction(c.executionId(), c.toolName(), c.arguments(), c.riskLevel());
     }
 
     @Override

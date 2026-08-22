@@ -64,10 +64,18 @@ class AgentOrchestratorTest {
 
     private AgentOrchestrator orchestrator(ScriptedLlmClient llm, ToolExecutor executor, AgentToolCatalog catalog,
                                            AgentProperties p, Clock c, GuardrailEngine engine, RateLimiter limiter) {
+        return orchestrator(llm, executor, catalog, p, c, engine, limiter, new NoOpAgentExecutionListener());
+    }
+
+    private AgentOrchestrator orchestrator(ScriptedLlmClient llm, ToolExecutor executor, AgentToolCatalog catalog,
+                                           AgentProperties p, Clock c, GuardrailEngine engine, RateLimiter limiter,
+                                           AgentExecutionListener listener) {
         ObjectMapper om = new ObjectMapper();
         AgentPlanner planner = new AgentPlanner(llm, new AgentPromptService(), new AgentDecisionValidator(), catalog);
+        AgentAuditEmitter audit = new AgentAuditEmitter(listener,
+                new com.prince.agentic.guardrail.FingerprintService(om));
         return new AgentOrchestrator(planner, executor, catalog,
-                new ObservationSerializer(om, p), p, c, new SimpleMeterRegistry(), om, engine, limiter);
+                new ObservationSerializer(om, p), p, c, new SimpleMeterRegistry(), om, engine, limiter, audit);
     }
 
     private AgentToolCatalog emptyCatalog() {
@@ -339,6 +347,61 @@ class AgentOrchestratorTest {
         assertThat(r.status()).isEqualTo(AgentStatus.BLOCKED);
         assertThat(r.failureCode()).isEqualTo("RATE_LIMITED");
         verifyNoInteractions(executor);
+    }
+
+    @Test
+    void auditEvents_areEmitted_forSearchThenFinal() {
+        ToolExecutor executor = mock(ToolExecutor.class);
+        when(executor.execute(eq("task.search"), anyMap(), any()))
+                .thenReturn(ToolResult.ok("task.search", List.of("t1"), 3));
+        AgentToolCatalog catalog = emptyCatalog();
+        CapturingListener listener = new CapturingListener();
+        ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
+                new AgentDecision(AgentAction.TOOL_CALL, null, "task.search", Map.of("p", "HIGH")),
+                new AgentDecision(AgentAction.FINAL, "done", null, null));
+
+        AgentResult r = orchestrator(llm, executor, catalog, props, clock, riskEngine(), alwaysAllow(), listener)
+                .run(user, "x");
+
+        assertThat(r.status()).isEqualTo(AgentStatus.COMPLETED);
+        assertThat(listener.started).isEqualTo(1);
+        assertThat(listener.completed).isEqualTo(1);
+        assertThat(listener.lastStatus).isEqualTo(AgentStatus.COMPLETED);
+        // At least: LLM_DECISION, TOOL_CALL, LLM_DECISION, FINAL steps + one tool execution.
+        assertThat(listener.stepKinds).contains(AgentStepKind.LLM_DECISION, AgentStepKind.TOOL_CALL,
+                AgentStepKind.FINAL);
+        assertThat(listener.toolExecutions).isEqualTo(1);
+    }
+
+    @Test
+    void auditCompleted_reflectsPendingConfirmation_forSideEffectTool() {
+        ToolExecutor executor = mock(ToolExecutor.class);
+        AgentToolCatalog catalog = emptyCatalog();
+        CapturingListener listener = new CapturingListener();
+        ScriptedLlmClient llm = new ScriptedLlmClient().enqueueStructured(
+                new AgentDecision(AgentAction.TOOL_CALL, null, "task.create", Map.of("title", "x")));
+
+        AgentResult r = orchestrator(llm, executor, catalog, props, clock, riskEngine(), alwaysAllow(), listener)
+                .run(user, "x");
+
+        assertThat(r.status()).isEqualTo(AgentStatus.PENDING_CONFIRMATION);
+        assertThat(listener.lastStatus).isEqualTo(AgentStatus.PENDING_CONFIRMATION);
+        assertThat(listener.stepKinds).contains(AgentStepKind.CONFIRMATION_REQUIRED);
+    }
+
+    /** Captures emitted audit facts so a test can assert lifecycle emission without a database. */
+    private static final class CapturingListener implements AgentExecutionListener {
+        int started;
+        int completed;
+        int toolExecutions;
+        AgentStatus lastStatus;
+        final java.util.List<AgentStepKind> stepKinds = new java.util.ArrayList<>();
+
+        @Override public void onExecutionStarted(AuditExecutionStart e) { started++; }
+        @Override public void onStep(AuditStepEvent e) { stepKinds.add(e.kind()); }
+        @Override public void onToolExecution(AuditToolEvent e) { toolExecutions++; }
+        @Override public void onExecutionCompleted(AuditExecutionEnd e) { completed++; lastStatus = e.status(); }
+        @Override public void onConfirmationExecuted(AuditConfirmationExecuted e) { }
     }
 
     /** Returns {@code start} on its first call (used by AgentExecution to compute the deadline),

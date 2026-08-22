@@ -9,7 +9,28 @@ Categories: **Added · Changed · Fixed · Removed · Security · Docs**.
 
 ## [Unreleased]
 
-_Next: Milestone 9 — Durable audit (agent/tool execution records)._
+_Next: Milestone 10 — Observability dashboards (Prometheus/Grafana), retention purge enforcement._
+
+---
+
+## [0.0.9] — 2026-08-22 — Milestone 9: Durable Agent Audit & Execution History
+
+### Added
+- **Audit module** (`com.prince.agentic.audit`): Flyway `V5` three typed tables — `agent_executions`, `agent_steps`, `tool_executions` — with `BIGINT` identity PKs + UUID natural keys (`execution_uid`/`tool_execution_uid`), `owner_id` FK CASCADE, `TIMESTAMPTZ`→`Instant`, VARCHAR enums + CHECK constraints, and query-pattern indexes. JPA entities + repositories.
+- **Listener seam** (agent package, repository-free): `AgentExecutionListener` (+ event records `AuditExecutionStart`/`AuditStepEvent`/`AuditToolEvent`/`AuditExecutionEnd`/`AuditConfirmationExecuted`), `NoOpAgentExecutionListener` default, and a stateless `AgentAuditEmitter` that builds events + computes `arguments_hash` (SHA-256, reusing the M8 `FingerprintService` canonicalization). New agent-native enums `AgentStepKind`/`AgentStepOutcome`/`AgentToolOutcome`.
+- **Recorder:** best-effort `AuditService` implementing the listener (`@Primary`) delegating to a transactional `AuditWriter` (`REQUIRES_NEW`, idempotent via UNIQUE natural keys, swallow-on-failure + `audit.write.failure`). Never blocks or rolls back the agent/domain path.
+- **Read API:** `GET /api/v1/agent/executions` (paginated, filtered via type-safe JPA Specifications) and `GET /api/v1/agent/executions/{executionId}` (steps + tool executions); owner-scoped, masked 404, sanitized DTOs. `AuditProperties` (`audit.*`), `AuditConfig`.
+- **Metrics:** `audit.execution.created`, `audit.step.created`, `audit.tool_execution.created`, `audit.write.success`, `audit.write.failure`.
+
+### Changed
+- `AgentOrchestrator` emits audit lifecycle facts at each step (start / LLM decision / guardrail / tool / confirmation-required / final / failure / completion) via `AgentAuditEmitter`; gains a `conversationId` run parameter for audit correlation. `AgentConfirmationService` emits a `CONFIRMATION_APPROVED` step + tool execution and promotes the run `PENDING_CONFIRMATION → COMPLETED/FAILED`.
+- **Additive M8 propagation (no behavior change):** `PendingAction`/`Confirmation`/`ConfirmedAction` carry the originating `executionId` so a confirm is audited against the correct run; `GuardrailDecision.allowWithRisk` lets the engine surface the resolved risk on ALLOW for tool audit.
+
+### Security / Privacy
+- Persists safe metadata + hashes + bounded, length-capped summaries only — **never** raw prompts, tool arguments, LLM output, system prompts, **chain-of-thought**, JWTs, or secrets. Reads are owner-scoped (cross-user → masked 404); `conversationId` is a filter, never an authorization claim. Honest best-effort semantics: a business action can succeed while its audit row is temporarily missing (recorded as a metric), documented.
+
+### Docs
+- ADR-0026…0029; updated `AUDIT_LOGGING.md` (owner-scoped; supersedes the admin-all implication), `DATABASE.md` (supersedes the `audit_events` sketch with the typed 3-table model), `AGENT_ARCHITECTURE.md`, `SECURITY.md`, `DATA_PRIVACY.md`, `API.md`, `TESTING.md`, `OBSERVABILITY.md`, `PERFORMANCE.md`, `ROADMAP.md`, `TECH_STACK.md`, `README.md`, `backend/README.md`, `.env.example`. M10 dashboards / retention purge marked PLANNED.
 
 ---
 

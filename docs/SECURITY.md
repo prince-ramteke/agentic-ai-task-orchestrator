@@ -192,3 +192,13 @@ use, cross-conversation use, expiry, and record tampering are all rejected with 
 **not** claim to solve prompt injection: the boundary is structural (typed decisions, tool allowlist,
 verified identity, authorization, confirmation, bounded execution), not content heuristics. See
 ADR-0021…0025 and `GUARDRAILS.md`.
+
+## Milestone 9 — Audit access & privacy (IMPLEMENTED)
+
+Durable agent audit is **owner-scoped**: every read filters by the authenticated user's id in SQL; a
+missing/foreign execution id → masked **404 `EXECUTION_NOT_FOUND`**; `conversationId` is a filter, never
+an authorization claim. USER and ADMIN both see only their own executions (admin cross-user deferred).
+Audit stores **no** raw prompts, tool arguments, LLM output, system prompts, **chain-of-thought**, JWTs,
+or secrets — only metadata, `arguments_hash` (SHA-256), and bounded summaries; API responses expose no
+internal class names or stack traces. Audit is written from backend facts (never the LLM) and never
+blocks the execution path. See ADR-0026…0029, `DATA_PRIVACY.md`.

@@ -57,6 +57,19 @@ public class FingerprintService {
                 toolName,
                 riskLevel.name(),
                 canonicalArgumentsJson);
+        return sha256Hex(material);
+    }
+
+    /**
+     * SHA-256 hex of an argument map's canonical form (M9 audit {@code arguments_hash}). Reuses the
+     * same deterministic, sorted-key canonicalization as the confirmation fingerprint, so a hash is
+     * stable and never contains the raw argument values. Null/empty → hash of {@code "{}"}.
+     */
+    public String argumentsHashHex(Map<String, Object> arguments) {
+        return sha256Hex(canonicalArguments(arguments));
+    }
+
+    private static String sha256Hex(String material) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(material.getBytes(StandardCharsets.UTF_8));

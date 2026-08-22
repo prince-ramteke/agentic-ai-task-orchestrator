@@ -171,6 +171,8 @@ tool exception ever reaches HTTP): `TOOL_NOT_FOUND` (404), `TOOL_INVALID_INPUT` 
 | POST | `/api/v1/agent/execute` | **authenticated** | 200 | Run one bounded agent execution; optionally continue a conversation |
 | POST | `/api/v1/agent/confirmations/{id}` | **authenticated** | 200 | Confirm & execute a pending side-effecting action **exactly once** (no request body) |
 | DELETE | `/api/v1/agent/confirmations/{id}` | **authenticated** | 204 | Cancel a pending confirmation (404-masked) |
+| GET | `/api/v1/agent/executions` | **authenticated** | 200 | List the caller's durable agent execution history (paginated, filterable) — M9 |
+| GET | `/api/v1/agent/executions/{executionId}` | **authenticated** | 200 | One execution with its ordered steps + tool executions (404-masked) — M9 |
 | DELETE | `/api/v1/agent/conversations/{id}` | **authenticated** | 204 | Delete the caller's conversation memory (404-masked) |
 
 Request: `{ "message": "Show me my high-priority tasks", "conversationId"?: "<uuid>" }` — `message` is
@@ -217,6 +219,19 @@ Only **pre-execution** faults use the standard `ApiError` envelope: request-body
 VALIDATION_ERROR`; missing/invalid auth → `401`. Identity comes only from the authenticated principal;
 the request body carries no `userId`/`role`/`ownerId`. Never returns raw, unvalidated model text — the
 `response` is the agent's `FINAL` answer, grounded in actual tool results. See ADR-0013…0016.
+
+**M9 audit read API (owner-scoped, read-only).** `GET /api/v1/agent/executions` returns a paginated
+`{content[], page, size, totalElements, totalPages, first, last}` of execution summaries
+(`executionId, status, conversationId, startedAt, completedAt, durationMs, iterations, toolCalls,
+failureCode`). Bounded filters: `status`, `conversationId`, `from`/`to` (ISO-8601 instants), `toolName`;
+pagination `page`/`size` (size clamped); `sort` whitelisted to `startedAt`/`completedAt`/`status`
+(default `startedAt DESC`). `GET /api/v1/agent/executions/{executionId}` adds `finalResponseSummary`
+(bounded) plus ordered `steps` (`sequence, type, status, toolName, detailCode, durationMs`) and
+`toolExecutions` (`toolName, riskLevel, outcome, errorCode, confirmationId, argumentsHash,
+resultSummary, durationMs`). Owner-scoped: a missing/foreign `executionId` → **404
+`EXECUTION_NOT_FOUND`** (existence-masked). Responses expose **no** raw prompts, tool arguments, LLM
+output, chain-of-thought, internal class names, stack traces, or secrets (ADR-0026…0029,
+`AUDIT_LOGGING.md`). Audit is append-only via an internal listener — there are no write endpoints.
 
 ## 7. Planned endpoints (design only — not implemented)
 

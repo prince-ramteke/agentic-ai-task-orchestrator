@@ -81,3 +81,12 @@ per-tool pre-execution budget check that fails **before** starting work that can
 interrupted. `Future.cancel(true)` around a transactional/SIDE_EFFECTING operation is explicitly
 rejected. Confirmation and rate-limit state use single, TTL'd Redis keys (`GETDEL` / `INCR`) — no
 distributed lock, no extra round-trips beyond one per gate.
+
+## Milestone 9 — Audit write cost (IMPLEMENTED; measured)
+
+Audit adds a handful of small, indexed inserts per run (≈1 execution + 1 step/iteration + 1 per tool +
+1 completion), each in its own short `REQUIRES_NEW` transaction **outside** any LLM/tool transaction and
+best-effort, so it never blocks or extends a domain transaction. `duration_ms` is measured, never
+fabricated; token usage is **not** stored (M4 avoided fabricating counts; M9 does not invent them).
+Actual audit-write timing is measured under Testcontainers during verification — no unsupported
+performance claims. See ADR-0027.

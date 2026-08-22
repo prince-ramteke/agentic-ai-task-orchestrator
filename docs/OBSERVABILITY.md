@@ -99,3 +99,11 @@ conversationId, arguments, or prompt text): `guardrail.allow`, `guardrail.deny`,
 `guardrail.rate_limited`, `guardrail.policy_violation`. Guardrail decisions are logged with
 execution/request ids; arguments are never logged raw. Durable audit records remain **M9 (PLANNED)**;
 dashboards remain **M10 (PLANNED)**.
+
+## Milestone 9 — Audit write metrics (IMPLEMENTED)
+
+Micrometer counters (low-cardinality labels only — `stepType`/`outcome`; never userId/conversationId/
+args): `audit.execution.created`, `audit.step.created`, `audit.tool_execution.created`,
+`audit.write.success`, `audit.write.failure`. A swallowed audit-write failure is observable via
+`audit.write.failure` + a WARN log (best-effort; never blocks the agent path). These do not duplicate
+the M8 `guardrail.*` metrics. Full dashboards/aggregation remain **M10 (PLANNED)**.

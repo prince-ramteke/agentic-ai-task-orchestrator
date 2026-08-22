@@ -34,13 +34,18 @@ class AgentConfirmationServiceTest {
     private final ObservationSerializer observations =
             new ObservationSerializer(new ObjectMapper(), new AgentProperties(8, 10, 60, 2, 2000, 20));
 
+    private final AgentAuditEmitter audit = new AgentAuditEmitter(new NoOpAgentExecutionListener(),
+            new com.prince.agentic.guardrail.FingerprintService(new ObjectMapper()));
+    private final java.time.Clock clock =
+            java.time.Clock.fixed(java.time.Instant.parse("2026-08-22T12:00:00Z"), java.time.ZoneOffset.UTC);
+
     private AgentConfirmationService service(RateLimiter limiter) {
-        return new AgentConfirmationService(confirmations, limiter, executor, observations);
+        return new AgentConfirmationService(confirmations, limiter, executor, observations, audit, clock);
     }
 
     @Test
     void confirm_executesExactStoredActionOnce_andReturnsSafeSummary() {
-        ConfirmedAction stored = new ConfirmedAction("task.create",
+        ConfirmedAction stored = new ConfirmedAction("exec-1", "task.create",
                 Map.of("title", "review"), ToolRiskLevel.SIDE_EFFECTING);
         when(confirmations.confirm(user, "conf-1")).thenReturn(stored);
         when(executor.execute(eq("task.create"), anyMap(), any()))

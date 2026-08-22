@@ -61,7 +61,7 @@ class RedisConfirmationServiceTest {
     }
 
     private PendingAction action() {
-        return new PendingAction("task.create", Map.of("title", "review"), ToolRiskLevel.SIDE_EFFECTING);
+        return new PendingAction("exec-1", "task.create", Map.of("title", "review"), ToolRiskLevel.SIDE_EFFECTING);
     }
 
     @Test
@@ -105,7 +105,7 @@ class RedisConfirmationServiceTest {
     @Test
     void confirm_tamperedFingerprint_throwsMismatch() {
         // Store a blob whose fingerprint does not match its bound fields.
-        Confirmation tampered = new Confirmation("id", 1L, "conv-1", "task.create",
+        Confirmation tampered = new Confirmation("id", 1L, "conv-1", "exec-1", "task.create",
                 Map.of("title", "review"), ToolRiskLevel.SIDE_EFFECTING, "deadbeef",
                 clock.instant().toEpochMilli(), clock.instant().plusSeconds(300).toEpochMilli());
         when(ops.get(anyString())).thenReturn(toJson(tampered));
@@ -130,7 +130,7 @@ class RedisConfirmationServiceTest {
     private String storedJson(AuthenticatedUser owner, String conv, PendingAction a, Clock c) {
         String canonical = fingerprints.canonicalArguments(a.arguments());
         String fp = fingerprints.fingerprint(owner.userId(), conv, a.tool(), canonical, a.riskLevel());
-        Confirmation confirmation = new Confirmation("id", owner.userId(), conv, a.tool(),
+        Confirmation confirmation = new Confirmation("id", owner.userId(), conv, a.executionId(), a.tool(),
                 a.arguments(), a.riskLevel(), fp,
                 c.instant().toEpochMilli(), c.instant().plusSeconds(300).toEpochMilli());
         return toJson(confirmation);

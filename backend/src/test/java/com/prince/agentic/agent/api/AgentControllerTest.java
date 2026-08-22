@@ -88,7 +88,7 @@ class AgentControllerTest {
         String token = registerAndLogin("agent-pending@example.com");
         AgentResult pending = new AgentResult("exec-2", AgentStatus.PENDING_CONFIRMATION, null, 1, 0,
                 3L, "CONFIRMATION_REQUIRED", List.of(),
-                new PendingAction("task.create", java.util.Map.of("title", "x"), ToolRiskLevel.SIDE_EFFECTING));
+                new PendingAction("exec-2", "task.create", java.util.Map.of("title", "x"), ToolRiskLevel.SIDE_EFFECTING));
         PendingConfirmation pc = new PendingConfirmation("conf-1", "task.create",
                 ToolRiskLevel.SIDE_EFFECTING, "Run tool 'task.create' (SIDE_EFFECTING).",
                 java.time.Instant.parse("2026-08-22T12:05:00Z"));

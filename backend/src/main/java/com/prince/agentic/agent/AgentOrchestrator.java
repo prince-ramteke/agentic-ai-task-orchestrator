@@ -20,20 +20,22 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * The bounded agent loop (spec §8): decision -> validate -> execute -> observe -> repeat until
- * FINAL or a bound trips. Never touches a repository, {@code EntityManager}, or a domain service
+ * The bounded agent loop (spec §8): decision -> validate -> guardrail -> execute -> observe -> repeat
+ * until FINAL or a bound trips. Never touches a repository, {@code EntityManager}, or a domain service
  * directly; its only path to effects is {@link ToolExecutor}.
  *
+ * <p><b>M9 audit:</b> at each lifecycle point the loop emits a backend-observed fact through the
+ * repository-free {@link AgentAuditEmitter} → {@link AgentExecutionListener}. Emission is best-effort
+ * (the recorder swallows failures) and never alters control flow. The orchestrator owns the per-run
+ * step {@code sequence} and per-step timings.
+ *
  * <p><b>Ruling R-B — external cancellation seam:</b> the public entry point delegates to a
- * package-private overload that accepts a {@link CancellationToken}, so an M8 caller (or a test)
- * can inject external cancellation without touching the deadline-backed token owned by the
- * {@link AgentExecution}. At the top of every iteration, three independent checks run in order,
- * each its own branch: external cancellation, deadline (via {@code AgentExecution.cancellation()}),
- * then the iteration budget.
+ * package-private overload that accepts a {@link CancellationToken}.
  */
 @Service
 public class AgentOrchestrator {
@@ -50,11 +52,12 @@ public class AgentOrchestrator {
     private final ObjectMapper mapper;
     private final GuardrailEngine guardrails;
     private final RateLimiter rateLimiter;
+    private final AgentAuditEmitter audit;
 
     public AgentOrchestrator(AgentPlanner planner, ToolExecutor toolExecutor, AgentToolCatalog catalog,
                              ObservationSerializer observations, AgentProperties props, Clock clock,
                              MeterRegistry meters, ObjectMapper mapper,
-                             GuardrailEngine guardrails, RateLimiter rateLimiter) {
+                             GuardrailEngine guardrails, RateLimiter rateLimiter, AgentAuditEmitter audit) {
         this.planner = planner;
         this.toolExecutor = toolExecutor;
         this.catalog = catalog;
@@ -65,34 +68,39 @@ public class AgentOrchestrator {
         this.mapper = mapper;
         this.guardrails = guardrails;
         this.rateLimiter = rateLimiter;
+        this.audit = audit;
     }
 
     /** Public entry point: stateless (no conversation history), no external cancellation source. */
     public AgentResult run(AuthenticatedUser principal, String message) {
-        return run(principal, message, "");
+        return run(principal, message, "", null, () -> false);
     }
 
-    /**
-     * Public entry point carrying bounded prior-conversation context (M7). {@code historyContext} is
-     * an already-rendered, already-bounded string supplied by the memory layer; the orchestrator
-     * treats it as opaque untrusted text and never touches Redis itself.
-     */
+    /** Public entry point carrying bounded prior-conversation context (M7). */
     public AgentResult run(AuthenticatedUser principal, String message, String historyContext) {
-        return run(principal, message, historyContext, () -> false);
+        return run(principal, message, historyContext, null, () -> false);
+    }
+
+    /** Public entry point carrying bounded history + the conversation id (M7/M9 audit correlation). */
+    public AgentResult run(AuthenticatedUser principal, String message, String historyContext,
+                           String conversationId) {
+        return run(principal, message, historyContext, conversationId, () -> false);
     }
 
     /** Package-private overload carrying only the external cancellation seam (spec ruling R-B). */
     AgentResult run(AuthenticatedUser principal, String message, CancellationToken external) {
-        return run(principal, message, "", external);
+        return run(principal, message, "", null, external);
     }
 
-    /** Package-private core: bounded history + external cancellation seam. */
+    /** Package-private core: bounded history + conversation id + external cancellation seam. */
     AgentResult run(AuthenticatedUser principal, String message, String historyContext,
-                    CancellationToken external) {
+                    String conversationId, CancellationToken external) {
         String executionId = UUID.randomUUID().toString();
         String requestId = UUID.randomUUID().toString();
         AgentExecution ex = new AgentExecution(executionId, principal, requestId, clock, props);
         LoopDetector loop = new LoopDetector(mapper, props.loopThreshold());
+        audit.started(executionId, principal.userId(), conversationId, requestId, ex.startedAt());
+        int seq = 0;
 
         try {
             while (true) {
@@ -108,17 +116,27 @@ public class AgentOrchestrator {
                 }
                 ex.nextIteration();
 
+                Instant dStart = clock.instant();
                 AgentDecision decision;
                 try {
                     decision = planner.decide(message, historyContext, ex.observations(),
                             props.maxIterations() - ex.iteration(), props.maxToolCalls() - ex.toolCallsUsed());
                 } catch (AgentInvalidDecisionException e) {
+                    audit.step(executionId, seq++, AgentStepKind.FAILURE, AgentStepOutcome.FAILED,
+                            null, "AGENT_INVALID_DECISION", dStart, clock.instant());
                     return terminate(ex, AgentStatus.FAILED, "AGENT_INVALID_DECISION", null);
                 } catch (LlmException e) {
+                    audit.step(executionId, seq++, AgentStepKind.FAILURE, AgentStepOutcome.FAILED,
+                            null, "AGENT_LLM_ERROR", dStart, clock.instant());
                     return terminate(ex, AgentStatus.FAILED, "AGENT_LLM_ERROR", null);
                 }
+                Instant dEnd = clock.instant();
+                audit.step(executionId, seq++, AgentStepKind.LLM_DECISION, AgentStepOutcome.OK,
+                        decision.tool(), decision.action().name(), dStart, dEnd);
 
                 if (decision.action() == AgentAction.FINAL) {
+                    audit.step(executionId, seq++, AgentStepKind.FINAL, AgentStepOutcome.OK,
+                            null, null, dEnd, clock.instant());
                     return terminate(ex, AgentStatus.COMPLETED, null, decision.response());
                 }
 
@@ -132,28 +150,61 @@ public class AgentOrchestrator {
                 }
 
                 // --- M8 guardrail gate (spec §11, §25): policy → confirmation → rate-limit → execute.
-                // No effect can occur before this passes. The engine is authoritative over risk.
                 GuardrailContext gctx = new GuardrailContext(ex.executionId(), ex.requestId());
                 GuardrailDecision guard = guardrails.evaluate(principal, decision, gctx);
                 if (guard.outcome() == GuardrailOutcome.DENY) {
+                    int s = seq++;
+                    audit.step(executionId, s, AgentStepKind.GUARDRAIL, AgentStepOutcome.BLOCKED,
+                            decision.tool(), guard.reasonCode(), dEnd, clock.instant());
+                    audit.toolExecution(executionId, s, decision.tool(), guard.riskLevel(),
+                            decision.arguments(), AgentToolOutcome.DENIED, guard.reasonCode(), null, null,
+                            dEnd, clock.instant());
                     return terminate(ex, AgentStatus.BLOCKED, guard.reasonCode(), null);
                 }
                 if (guard.requiresConfirmation()) {
-                    PendingAction pending =
-                            new PendingAction(decision.tool(), decision.arguments(), guard.riskLevel());
+                    int s = seq++;
+                    audit.step(executionId, s, AgentStepKind.CONFIRMATION_REQUIRED, AgentStepOutcome.REQUIRED,
+                            decision.tool(), guard.riskLevel().name(), dEnd, clock.instant());
+                    audit.toolExecution(executionId, s, decision.tool(), guard.riskLevel(),
+                            decision.arguments(), AgentToolOutcome.CONFIRMATION_REQUIRED, null, null, null,
+                            dEnd, clock.instant());
+                    PendingAction pending = new PendingAction(
+                            executionId, decision.tool(), decision.arguments(), guard.riskLevel());
                     return terminatePending(ex, pending);
                 }
                 if (!rateLimiter.tryAcquire(principal.userId())) {
+                    int s = seq++;
+                    audit.step(executionId, s, AgentStepKind.GUARDRAIL, AgentStepOutcome.BLOCKED,
+                            decision.tool(), "RATE_LIMITED", dEnd, clock.instant());
+                    audit.toolExecution(executionId, s, decision.tool(), guard.riskLevel(),
+                            decision.arguments(), AgentToolOutcome.NOT_EXECUTED, "RATE_LIMITED", null, null,
+                            dEnd, clock.instant());
                     return terminate(ex, AgentStatus.BLOCKED, "RATE_LIMITED", null);
                 }
 
+                Instant tStart = clock.instant();
                 ToolExecutionContext ctx = new ToolExecutionContext(
                         principal, ex.requestId(), ex.executionId(), Map.of());
                 ToolResult<Object> result = toolExecutor.execute(
                         decision.tool(), decision.arguments(), ctx);
+                Instant tEnd = clock.instant();
                 ex.recordToolCall();
                 meters.counter("agent.tool.calls").increment();
-                ex.addObservation(observations.toObservation(result));
+                AgentObservation obs = observations.toObservation(result);
+                ex.addObservation(obs);
+
+                int s = seq++;
+                boolean ok = result.success();
+                audit.step(executionId, s, AgentStepKind.TOOL_CALL,
+                        ok ? AgentStepOutcome.OK : AgentStepOutcome.FAILED,
+                        decision.tool(), ok ? null : obs.errorCode(), tStart, tEnd);
+                // Emit a tool-execution row only when a real tool ran (skip an unresolved TOOL_NOT_FOUND,
+                // whose risk is unknown and which never executed).
+                if (!"TOOL_NOT_FOUND".equals(obs.errorCode())) {
+                    audit.toolExecution(executionId, s, decision.tool(), guard.riskLevel(),
+                            decision.arguments(), ok ? AgentToolOutcome.SUCCESS : AgentToolOutcome.FAILED,
+                            ok ? null : obs.errorCode(), null, obs.resultSummary(), tStart, tEnd);
+                }
             }
         } catch (RuntimeException unexpected) {
             log.warn("agent.run unexpected failure executionId={}", executionId, unexpected);
@@ -168,14 +219,16 @@ public class AgentOrchestrator {
         meters.summary("agent.iterations").record(ex.iteration());
         log.info("agent.run executionId={} status={} iterations={} toolCalls={} durationMs={}",
                 ex.executionId(), status, ex.iteration(), ex.toolCallsUsed(), ms);
+        audit.completed(ex.executionId(), status, failureCode, response,
+                ex.iteration(), ex.toolCallsUsed(), clock.instant(), ms);
         return new AgentResult(ex.executionId(), status, response,
                 ex.iteration(), ex.toolCallsUsed(), ms, failureCode, ex.observations());
     }
 
     /**
-     * Terminate a run because a guardrail requires confirmation (spec §11). Records the same lifecycle
-     * metrics as {@link #terminate} and carries the exact {@link PendingAction} out; the conversation
-     * layer binds it to a stored, fingerprint-bound confirmation. No tool has executed.
+     * Terminate a run because a guardrail requires confirmation (spec §11). The execution is recorded
+     * as terminal {@code PENDING_CONFIRMATION}; a later successful confirm promotes it (M9). No tool
+     * has executed.
      */
     private AgentResult terminatePending(AgentExecution ex, PendingAction pending) {
         long ms = ex.elapsedMillis(clock);
@@ -185,6 +238,8 @@ public class AgentOrchestrator {
         meters.summary("agent.iterations").record(ex.iteration());
         log.info("agent.run executionId={} status={} iterations={} toolCalls={} durationMs={} pendingTool={}",
                 ex.executionId(), status, ex.iteration(), ex.toolCallsUsed(), ms, pending.tool());
+        audit.completed(ex.executionId(), status, "CONFIRMATION_REQUIRED", null,
+                ex.iteration(), ex.toolCallsUsed(), clock.instant(), ms);
         return new AgentResult(ex.executionId(), status, null,
                 ex.iteration(), ex.toolCallsUsed(), ms, "CONFIRMATION_REQUIRED", ex.observations(), pending);
     }

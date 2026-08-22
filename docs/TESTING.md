@@ -135,3 +135,18 @@ Three levels, all deterministic and offline (`./mvnw verify` needs **no** live O
   turn 2's captured LLM prompt **contains turn 1's bounded context** (not merely that Redis holds data),
   plus cross-user 404, backward-compat (no `conversationId`), and delete-then-reuse → 404.
 - Live Ollama tests stay profile-gated. `./mvnw verify` runs the Redis IT for real when Docker is present.
+
+## Milestone 9 — Durable audit tests (IMPLEMENTED)
+
+- **Unit:** `AuditServiceTest` (best-effort swallow + metrics; failure never rethrown), `AuditWriterTest`
+  (idempotent check-before-insert, summary bounding/redaction, status mapping, skip-on-missing),
+  `NoOpAgentExecutionListenerTest` (default sink truly no-ops), `AgentOrchestratorTest` (lifecycle
+  emission via a capturing listener; existing behaviour unchanged).
+- **Integration (Testcontainers PostgreSQL):** `AgentAuditPersistenceIT` (round-trip, UNIQUE natural-key
+  idempotency, owner-scoped + paginated + date-range filtering, confirm-promotion).
+- **End-to-end (Postgres + Redis, scripted LLM):** `AgentAuditE2EIT` — agent → guardrail → tool → audit
+  → PostgreSQL, read back via the API; the confirm flow appends a `CONFIRMATION_APPROVED` step + tool
+  execution and promotes the execution; cross-user reads are masked 404.
+- **Security:** `AgentAuditControllerTest` + `AgentAuditE2EIT` assert owner isolation and that no raw
+  prompt/argument/output/chain-of-thought/secret is stored or returned. Coverage gate ≥0.75 held;
+  live-Ollama tests stay profile-gated.

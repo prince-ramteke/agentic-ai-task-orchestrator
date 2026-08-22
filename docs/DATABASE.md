@@ -43,6 +43,26 @@ ADMIN may act on any single row by id. `due_date` is a calendar `DATE`/`LocalDat
 are `Instant`/`TIMESTAMPTZ` (ADR-0007). A PostgreSQL-only note: nullable `String` filter params are
 `CAST(... AS string)` in JPQL so PG can type the bind (see `CustomerRepository`).
 
+## 0c. Implemented schema (M9) — VERIFIED
+
+Flyway migration `V5__create_agent_audit.sql` adds the durable agent audit model — **three typed
+tables**, superseding the earlier generic `audit_events` sketch (guardrail/confirmation outcomes are
+typed `agent_steps`, not generic events). Written from backend-observed facts (never the LLM), each
+table has a `BIGINT` identity PK plus a **UUID natural key** for idempotency (ADR-0026).
+
+| Table | Columns (summary) | Constraints / indexes |
+|---|---|---|
+| `agent_executions` | `id` (PK), `execution_uid` (UUID), `owner_id`, `conversation_id`, `request_id`, `status`, `iterations`, `tool_calls`, `failure_code`, `final_response_summary` (≤600, bounded), `started_at`/`completed_at`/`created_at` (TIMESTAMPTZ), `duration_ms` | `uq_agent_executions_uid UNIQUE(execution_uid)`; `fk...owner`→`users` CASCADE; `chk...status` (STARTED/RUNNING/COMPLETED/FAILED/TIMED_OUT/CANCELLED/LIMIT_REACHED/LOOP_DETECTED/PENDING_CONFIRMATION/BLOCKED); indexes `(owner_id, started_at DESC)`, `(owner_id, conversation_id)`, `(owner_id, status)` |
+| `agent_steps` | `id` (PK), `execution_id`, `sequence`, `step_type`, `status`, `tool_name`, `detail_code`, `started_at`/`completed_at`, `duration_ms` | `uq_agent_steps_exec_seq UNIQUE(execution_id, sequence)`; `fk...execution` CASCADE; `chk...type` (LLM_DECISION/GUARDRAIL/TOOL_CALL/CONFIRMATION_*/FINAL/FAILURE); `chk...status` (OK/FAILED/BLOCKED/REQUIRED); index `(execution_id)` |
+| `tool_executions` | `id` (PK), `tool_execution_uid` (UUID), `step_id`, `execution_id`, `owner_id`, `tool_name`, `risk_level`, `outcome`, `error_code`, `confirmation_id`, `arguments_hash` (SHA-256 CHAR(64)), `result_summary` (≤600, bounded), `started_at`/`completed_at`, `duration_ms` | `uq_tool_executions_uid UNIQUE(tool_execution_uid)`; FKs → `agent_steps`/`agent_executions`/`users` CASCADE; `chk...risk`, `chk...outcome` (SUCCESS/FAILED/DENIED/NOT_EXECUTED/CONFIRMATION_REQUIRED/TIMEOUT); indexes `(owner_id, started_at DESC)`, `(execution_id)`, `(tool_name)` |
+
+**Privacy:** stores only safe metadata + hashes + bounded summaries — **never** raw prompts, tool
+arguments, LLM output, chain-of-thought, or secrets (ADR-0028, `DATA_PRIVACY.md`). **Writes** are
+best-effort in their own `REQUIRES_NEW` transactions, idempotent via the UNIQUE natural keys, and never
+block the agent path (ADR-0027). **Reads** are owner-scoped via JPA Specifications, paginated, and
+sanitized (ADR-0029). Retention horizon is documented (`AGENT_AUDIT_RETENTION_DAYS`, default 90); **no
+purge scheduler in M9**.
+
 ## 1. Entities (conceptual)
 
 | Entity | Purpose | Owner |
@@ -51,10 +71,10 @@ are `Instant`/`TIMESTAMPTZ` (ADR-0007). A PostgreSQL-only note: nullable `String
 | `roles` | RBAC roles (USER, ADMIN); user↔role mapping | system |
 | `tasks` | User tasks: title, description, status, priority, estimated hours, due date | user |
 | `customers` | User's customer records: name, contact, metadata | user |
-| `agent_executions` | One row per agent run: objective, status, timestamps, user | user |
-| `tool_executions` | One row per tool call within a run: tool name, args (redacted), result summary, outcome | via execution |
-| `audit_events` | Durable audit trail (`AUDIT_LOGGING.md`) | system |
-| `conversations` / `messages` | Only if durable conversation history is required; otherwise conversation context stays in Redis | user |
+| `agent_executions` | One row per agent run: status, counts, timestamps, bounded final summary (M9, IMPLEMENTED) | user |
+| `agent_steps` | Ordered agent transitions: LLM decision, guardrail, confirmation, tool-call, final (M9, IMPLEMENTED) | via execution |
+| `tool_executions` | One row per tool call: tool, risk, outcome, error, args hash, bounded result summary (M9, IMPLEMENTED) | via execution / user |
+| `conversations` / `messages` | Not durable — conversation context stays in Redis (M7). Audit stores only the `conversation_id`, never the memory blob. | user |
 
 ## 2. Relationships
 
@@ -63,9 +83,9 @@ erDiagram
     users ||--o{ tasks : owns
     users ||--o{ customers : owns
     users ||--o{ agent_executions : initiates
-    agent_executions ||--o{ tool_executions : contains
-    users ||--o{ audit_events : subject_of
-    agent_executions ||--o{ audit_events : produces
+    agent_executions ||--o{ agent_steps : contains
+    agent_steps ||--o{ tool_executions : records
+    agent_executions ||--o{ tool_executions : owns
     users }o--o{ roles : has
 ```
 

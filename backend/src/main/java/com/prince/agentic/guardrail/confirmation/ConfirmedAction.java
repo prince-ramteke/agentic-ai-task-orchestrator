@@ -9,7 +9,8 @@ import java.util.Map;
  * executes precisely these tool + arguments through the normal {@code ToolExecutor} gates — the
  * confirmation authorizes intent, it never bypasses authorization.
  */
-public record ConfirmedAction(String toolName, Map<String, Object> arguments, ToolRiskLevel riskLevel) {
+public record ConfirmedAction(String executionId, String toolName, Map<String, Object> arguments,
+                              ToolRiskLevel riskLevel) {
 
     public ConfirmedAction {
         arguments = arguments == null ? Map.of() : Map.copyOf(arguments);

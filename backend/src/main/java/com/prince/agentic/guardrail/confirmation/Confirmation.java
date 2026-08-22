@@ -17,6 +17,7 @@ public record Confirmation(
         String id,
         long ownerUserId,
         String conversationId,
+        String executionId,
         String toolName,
         Map<String, Object> arguments,
         ToolRiskLevel riskLevel,
