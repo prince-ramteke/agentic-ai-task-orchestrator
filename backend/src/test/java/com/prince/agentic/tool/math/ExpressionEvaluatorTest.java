@@ -3,6 +3,12 @@ package com.prince.agentic.tool.math;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,5 +50,26 @@ class ExpressionEvaluatorTest {
     }
     @Test void empty_rejected() {
         assertThatThrownBy(() -> eval.evaluate("   ")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void concurrent_calls_are_independent() throws Exception {
+        // After the M-02 refactor ExpressionEvaluator has no instance state, so concurrent
+        // callers must each get the correct result for their own expression.
+        int threads = 20;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        List<Future<BigDecimal>> futures = new ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            int n = i;
+            futures.add(pool.submit(() -> {
+                ready.countDown();
+                ready.await();
+                return eval.evaluate(n + " * 2");
+            }));
+        }
+        pool.shutdown();
+        for (int i = 0; i < threads; i++) {
+            assertThat(futures.get(i).get()).isEqualByComparingTo(new BigDecimal(i * 2));
+        }
     }
 }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,7 +68,7 @@ class ToolExecutorTest {
 
     @Test
     void anonymous_on_auth_required_tool_is_TOOL_UNAUTHORIZED() {
-        ToolExecutionContext anon = new ToolExecutionContext(null, "req", "exec", Map.of());
+        ToolExecutionContext anon = new ToolExecutionContext(null, "req", "exec", Map.of(), Optional.empty());
         ToolResult<Object> r = executor(echoTool(Set.of("ROLE_USER"), true, null))
                 .execute("echo.do", Map.of("id", 5), anon);
         assertThat(r.error().code()).isEqualTo("TOOL_UNAUTHORIZED");

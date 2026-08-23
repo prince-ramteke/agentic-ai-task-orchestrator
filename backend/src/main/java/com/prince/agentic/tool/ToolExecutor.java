@@ -11,17 +11,36 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * The single deterministic entry point for running a tool — the boundary the future agent (M6) calls.
+ * The single deterministic entry point for running a tool — the boundary the agent calls.
  *
  * <p>Enforces the non-negotiable ordered gates and always returns a {@link ToolResult} (it does not
  * throw for execution-path outcomes):
  * <pre>
- *   resolve → authenticate → authorize (role) → bind → validate → execute → wrap
+ *   deadline-check → resolve → authenticate → authorize (role) → bind → validate → execute → wrap
  * </pre>
+ *
+ * <p><b>H-03 two-tier timeout enforcement:</b>
+ * <ol>
+ *   <li><b>Pre-execution deadline check (all tools):</b> if {@link ToolExecutionContext#deadline()}
+ *       is present and already past, the tool is rejected with {@code TOOL_TIMEOUT} before any
+ *       execution or side-effect begins.</li>
+ *   <li><b>In-flight Future timeout (READ_ONLY/DETERMINISTIC only):</b> execution is wrapped in a
+ *       virtual-thread {@link CompletableFuture} with {@code orTimeout} matching the descriptor's
+ *       {@link ToolDescriptor#timeout()}. SIDE_EFFECTING and HIGH_RISK tools are never forcibly
+ *       interrupted after starting (M8 invariant — see docs/GUARDRAILS.md).</li>
+ * </ol>
  *
  * <p><b>Security:</b> identity comes only from {@code context.principal()} (never from arguments);
  * unknown argument properties are rejected (a spoofed {@code ownerId}/{@code userId} → invalid input,
@@ -31,6 +50,9 @@ import java.util.Set;
 public class ToolExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(ToolExecutor.class);
+
+    // Virtual-thread-per-task executor for safe in-flight timeouts (Java 21).
+    private static final Executor VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private final ToolRegistry registry;
     private final ObjectMapper objectMapper;
@@ -60,6 +82,14 @@ public class ToolExecutor {
             ToolDescriptor d = tool.descriptor();
             risk = d.risk().name();
 
+            // H-03 tier 1: pre-execution deadline check — applies to ALL risk levels.
+            // If the agent-level deadline has already passed, reject before any side-effect begins.
+            if (context != null && context.deadline().isPresent()
+                    && Instant.now().isAfter(context.deadline().get())) {
+                return fail(toolName, "TOOL_TIMEOUT", "agent deadline exceeded before tool start",
+                        start, risk, context);
+            }
+
             if (d.requiresAuthentication() && (context == null || context.principal() == null)) {
                 return fail(toolName, "TOOL_UNAUTHORIZED", "authentication required", start, risk, context);
             }
@@ -72,7 +102,8 @@ public class ToolExecutor {
                 input = objectMapper.convertValue(
                         rawArguments == null ? Map.of() : rawArguments, d.inputType());
             } catch (IllegalArgumentException e) {
-                return fail(toolName, "TOOL_INVALID_INPUT", "arguments do not match the tool input", start, risk, context);
+                return fail(toolName, "TOOL_INVALID_INPUT", "arguments do not match the tool input",
+                        start, risk, context);
             }
 
             Set<ConstraintViolation<Object>> violations = validator.validate(input);
@@ -80,11 +111,23 @@ public class ToolExecutor {
                 return fail(toolName, "TOOL_INVALID_INPUT", firstMessage(violations), start, risk, context);
             }
 
-            Object data = ((Tool<Object, Object>) tool).execute(context, input);
+            // H-03 tier 2: risk-aware execution policy.
+            Object data;
+            if (d.risk() == ToolRiskLevel.READ_ONLY || d.risk() == ToolRiskLevel.DETERMINISTIC) {
+                // Safe to interrupt: wrap in a timed Future so a stuck tool doesn't block indefinitely.
+                data = timedExecute(tool, d, context, input);
+            } else {
+                // SIDE_EFFECTING / HIGH_RISK: never forcibly interrupt after starting (M8 invariant).
+                data = ((Tool<Object, Object>) tool).execute(context, input);
+            }
+
             long ms = elapsedMs(start);
             record(toolName, risk, "success", ms, context);
             return ToolResult.ok(toolName, data, ms);
 
+        } catch (ToolTimeoutSignal ts) {
+            // In-flight Future timed out (READ_ONLY/DETERMINISTIC only, tier 2).
+            return fail(toolName, "TOOL_TIMEOUT", "tool exceeded its time limit", start, risk, context);
         } catch (ApiException domain) {
             // Domain (or tool) ApiException — surface its stable code/message as the observation
             // (e.g. NOT_FOUND / FORBIDDEN from a domain service, or a TOOL_* from the tool itself).
@@ -92,6 +135,52 @@ public class ToolExecutor {
         } catch (RuntimeException unexpected) {
             log.warn("tool.exec unexpected failure tool={} risk={}", toolName, risk, unexpected);
             return fail(toolName, "TOOL_EXECUTION_FAILED", "tool execution failed", start, risk, context);
+        }
+    }
+
+    /**
+     * Executes the tool with a descriptor-scoped timeout. Used only for READ_ONLY and DETERMINISTIC tools.
+     *
+     * <p><b>Transaction context safety:</b> Spring's {@code @Transactional} propagation is
+     * {@link ThreadLocal}-based. Spinning the tool off to a virtual thread would sever that context.
+     * In production, the {@link com.prince.agentic.agent.AgentOrchestrator} never holds an active
+     * transaction across a tool call (see docs/GUARDRAILS.md), so the virtual-thread path is correct
+     * there. In {@code @Transactional} test methods, we detect the active transaction and fall back to
+     * inline execution so that tests can see uncommitted test-data created on the same thread.
+     *
+     * <p>Throws {@link ToolTimeoutSignal} (extends {@link RuntimeException}) on timeout so the outer
+     * catch in {@link #execute} can distinguish it from unexpected errors.
+     */
+    @SuppressWarnings("unchecked")
+    private Object timedExecute(Tool<?, ?> tool, ToolDescriptor d,
+                                ToolExecutionContext context, Object input) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            // Caller has an active transaction (e.g. @Transactional test): stay on the current thread
+            // to preserve Spring's ThreadLocal-based propagation. Timeout not enforced in this path —
+            // this never happens in production (orchestrator holds no transaction across tool calls).
+            return ((Tool<Object, Object>) tool).execute(context, input);
+        }
+        try {
+            return CompletableFuture.supplyAsync(
+                            () -> ((Tool<Object, Object>) tool).execute(context, input),
+                            VIRTUAL_EXECUTOR)
+                    .orTimeout(d.timeout().toMillis(), TimeUnit.MILLISECONDS)
+                    .join();
+        } catch (CompletionException ce) {
+            Throwable cause = ce.getCause();
+            if (cause instanceof TimeoutException) {
+                throw new ToolTimeoutSignal();
+            }
+            if (cause instanceof ApiException ae) throw ae;
+            if (cause instanceof RuntimeException re) throw re;
+            throw new RuntimeException(cause);
+        }
+    }
+
+    /** Internal signal (never escapes ToolExecutor) that a timed Future expired. */
+    private static final class ToolTimeoutSignal extends RuntimeException {
+        ToolTimeoutSignal() {
+            super("tool timeout signal", null, true, false); // no stack trace — never logged
         }
     }
 

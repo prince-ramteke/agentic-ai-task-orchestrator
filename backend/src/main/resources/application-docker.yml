@@ -1,0 +1,15 @@
+# Docker profile — activated when SPRING_PROFILES_ACTIVE=docker (set in Dockerfile).
+# Layered on top of application.yml; only divergences from the base config are declared here.
+#
+# H-02 (management port isolation):
+#   Moving the management server to port 9090 causes Spring Boot to route ALL actuator endpoints
+#   (health, info, prometheus) exclusively through port 9090. Port 8080 (the API port) never
+#   receives actuator traffic under this profile, so the SecurityConfig permitAll for
+#   /actuator/prometheus is inert — it simply never matches on the API port.
+#
+#   Operators MUST NOT expose port 9090 publicly. Restrict scrape access at the network layer
+#   (Docker network, reverse-proxy, firewall). See docs/SECURITY.md and docs/DEPLOYMENT.md.
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:9090}

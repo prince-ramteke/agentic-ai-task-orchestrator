@@ -75,6 +75,16 @@ guardrail:
   user-tool-budget-per-min: ${AGENT_USER_TOOL_BUDGET_PER_MIN:60}
   max-argument-chars: ${AGENT_MAX_ARGUMENT_CHARS:4000}
 
+# --- Auth endpoint rate limiting (H-01). IP-keyed, fixed-window, pre-authentication.
+#     Redis key: auth:rate:{ip}:{epochMinute}. Separate namespace from the guardrail rate limiter. ---
+auth:
+  rate-limit:
+    login-limit-per-min: ${AUTH_LOGIN_LIMIT_PER_MIN:20}
+    register-limit-per-min: ${AUTH_REGISTER_LIMIT_PER_MIN:5}
+    # Set to 0 when not behind a reverse proxy; set to 1 when behind a single trusted proxy, etc.
+    # Never set higher than the actual number of trusted upstream proxies (docs/SECURITY.md).
+    trusted-proxy-depth: ${AUTH_TRUSTED_PROXY_DEPTH:0}
+
 # --- Durable agent audit (M9): PostgreSQL execution history. Retention is now enforced by the
 #     scheduled AuditRetentionJob (M10, ADR-0031). Summaries are length-capped (redacted).
 #     See docs/AUDIT_LOGGING.md, docs/OBSERVABILITY.md. ---
@@ -145,7 +155,7 @@ info:
   app:
     name: ${spring.application.name}
     version: @project.version@
-    description: Agentic AI Task Orchestrator backend (Milestone 1 — Backend Foundation).
+    description: Agentic AI Task Orchestrator backend (M10 — observability and audit retention).
 
 # OpenAPI / Swagger UI
 springdoc:

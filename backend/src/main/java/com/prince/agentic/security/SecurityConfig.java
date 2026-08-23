@@ -1,5 +1,6 @@
 package com.prince.agentic.security;
 
+import com.prince.agentic.auth.ratelimit.AuthRateLimiterFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,9 +48,11 @@ public class SecurityConfig {
             "/actuator/health",
             "/actuator/health/**",
             "/actuator/info",
-            // M10 (ADR-0030): Prometheus scrape endpoint is public at the app layer. Production
-            // deployments must restrict scrape access at the network/reverse-proxy layer (documented
-            // in docs/SECURITY.md); Spring Security is not the enforcement point here.
+            // M10 (ADR-0030): Prometheus scrape endpoint is public at the app layer.
+            // H-02: under the docker profile, management.server.port=9090 moves ALL actuator
+            // endpoints to a separate port; this permitAll never matches on the API port (8080).
+            // In non-docker environments, restrict scrape access at the network/reverse-proxy layer
+            // (docs/SECURITY.md). Spring Security is not the enforcement point in either case.
             "/actuator/prometheus",
             "/v3/api-docs/**",
             "/swagger-ui/**",
@@ -57,15 +60,18 @@ public class SecurityConfig {
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AuthRateLimiterFilter authRateLimiterFilter;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler accessDeniedHandler;
     private final List<String> corsAllowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          AuthRateLimiterFilter authRateLimiterFilter,
                           RestAuthenticationEntryPoint authenticationEntryPoint,
                           RestAccessDeniedHandler accessDeniedHandler,
                           @Value("${security.cors.allowed-origins}") List<String> corsAllowedOrigins) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.authRateLimiterFilter = authRateLimiterFilter;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
         this.corsAllowedOrigins = corsAllowedOrigins;
@@ -83,6 +89,8 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
+                // H-01: IP-based auth rate limiter fires before any auth filter (pre-auth paths).
+                .addFilterBefore(authRateLimiterFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

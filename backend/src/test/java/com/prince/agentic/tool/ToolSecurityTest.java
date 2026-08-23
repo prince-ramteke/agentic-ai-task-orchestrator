@@ -95,7 +95,7 @@ class ToolSecurityTest {
 
     @Test
     void anonymous_context_is_unauthorized() {
-        ToolExecutionContext anon = new ToolExecutionContext(null, "req", "exec", Map.of());
+        ToolExecutionContext anon = new ToolExecutionContext(null, "req", "exec", Map.of(), java.util.Optional.empty());
         ToolResult<Object> r = executor.execute("task.get", Map.of("taskId", 1), anon);
         assertThat(r.error().code()).isEqualTo("TOOL_UNAUTHORIZED");
     }

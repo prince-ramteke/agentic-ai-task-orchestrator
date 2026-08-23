@@ -21,7 +21,7 @@
     <artifactId>agentic-ai-task-orchestrator</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>Agentic AI Task Orchestrator :: Backend</name>
-    <description>Backend foundation (Milestone 1) for the Agentic AI Task Orchestrator.</description>
+    <description>M10 — observability and audit retention for the Agentic AI Task Orchestrator.</description>
 
     <properties>
         <java.version>21</java.version>
@@ -289,6 +289,8 @@
                         <exclude>com/prince/agentic/common/observability/ObservabilityConfig.class</exclude>
                         <!-- M10: retention scheduling wiring (no business logic; the job IS unit-tested). -->
                         <exclude>com/prince/agentic/audit/retention/SchedulingConfig.class</exclude>
+                        <!-- H-01: auth rate-limit wiring (filter IS unit-tested; config is pure wiring). -->
+                        <exclude>com/prince/agentic/auth/ratelimit/AuthRateLimitConfig.class</exclude>
                     </excludes>
                 </configuration>
                 <executions>
@@ -320,6 +322,11 @@
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
                                             <minimum>0.75</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.65</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

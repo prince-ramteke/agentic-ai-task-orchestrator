@@ -23,6 +23,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -191,7 +192,8 @@ public class AgentOrchestrator {
 
                 Instant tStart = clock.instant();
                 ToolExecutionContext ctx = new ToolExecutionContext(
-                        principal, ex.requestId(), ex.executionId(), Map.of());
+                        principal, ex.requestId(), ex.executionId(), Map.of(),
+                        Optional.of(ex.deadline())); // H-03: propagate agent deadline to tool enforcement
                 ToolResult<Object> result = toolExecutor.execute(
                         decision.tool(), decision.arguments(), ctx);
                 Instant tEnd = clock.instant();
